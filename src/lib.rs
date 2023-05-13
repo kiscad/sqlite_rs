@@ -133,7 +133,7 @@ fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
 
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
     for i in 0..table.num_rows {
-        let rowb = table.row_slot(i + 1);
+        let rowb = table.row_slot(i);
         let row = deserialize_row(rowb);
         println!("{row}");
     }
