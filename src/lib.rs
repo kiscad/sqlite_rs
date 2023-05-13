@@ -154,7 +154,7 @@ struct Row {
 
 impl Row {
     fn build(id: u32, name: &str, mail: &str) -> Result<Self, PrepareErr> {
-        if name.len() > COL_USERNAME_SIZE - 1 || mail.len() > COL_EMAIL_SIZE - 1 {
+        if name.len() > COL_USERNAME_SIZE || mail.len() > COL_EMAIL_SIZE {
             return Err(PrepareErr::SyntaxErr);
         }
         let mut username = [0u8; COL_USERNAME_SIZE];
@@ -178,12 +178,12 @@ impl Row {
 
 impl std::fmt::Display for Row {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let username = CStr::from_bytes_until_nul(&self.username)
+        let username = std::str::from_utf8(&self.username)
             .unwrap()
-            .to_string_lossy();
-        let email = CStr::from_bytes_until_nul(&self.email)
+            .trim_end_matches('\0');
+        let email = std::str::from_utf8(&self.email)
             .unwrap()
-            .to_string_lossy();
+            .trim_end_matches('\0');
         write!(f, "({}, {:?}, {:?})", self.id, username, email)
     }
 }
