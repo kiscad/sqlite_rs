@@ -1,8 +1,10 @@
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::arch::aarch64::vreinterpret_u8_f64;
 use std::ffi::CStr;
 use std::fmt::Formatter;
 use std::io::{Read, Write};
+use std::num::IntErrorKind;
 
 pub fn repl(table: &mut Table) {
     let mut input_buffer = InputBuffer::new();
@@ -21,6 +23,14 @@ pub fn repl(table: &mut Table) {
         Ok(stmt) => stmt,
         Err(PrepareErr::SyntaxErr) => {
             println!("Syntax error. Could not parse statement.");
+            return;
+        }
+        Err(PrepareErr::StringTooLong) => {
+            println!("String is too long.");
+            return;
+        }
+        Err(PrepareErr::NegativeId) => {
+            println!("ID must be positive.");
             return;
         }
         Err(PrepareErr::Unrecognized) => {
@@ -79,6 +89,8 @@ enum Statement {
 enum PrepareErr {
     Unrecognized,
     SyntaxErr,
+    StringTooLong,
+    NegativeId,
 }
 
 fn prepare_statement(input: &InputBuffer) -> Result<Statement, PrepareErr> {
@@ -87,7 +99,7 @@ fn prepare_statement(input: &InputBuffer) -> Result<Statement, PrepareErr> {
             r"(?x)
             insert
             \s+
-            (\d+)      # id
+            (-?\d+)      # id
             \s+
             ([^\s]+)    # username
             \s+
@@ -99,7 +111,13 @@ fn prepare_statement(input: &InputBuffer) -> Result<Statement, PrepareErr> {
     match input {
         s if s.starts_with("insert") => match RE_INSERT.captures(input) {
             Some(cap) => {
-                let id = cap[1].parse::<u32>().unwrap();
+                let id = match cap[1].parse::<u32>() {
+                    Ok(v) => v,
+                    Err(e) if e.kind() == &IntErrorKind::InvalidDigit => {
+                        return Err(PrepareErr::NegativeId)
+                    }
+                    Err(_) => return Err(PrepareErr::SyntaxErr),
+                };
                 Ok(Statement::Insert(Row::build(id, &cap[2], &cap[3])?))
             }
             None => Err(PrepareErr::SyntaxErr),
@@ -155,7 +173,7 @@ struct Row {
 impl Row {
     fn build(id: u32, name: &str, mail: &str) -> Result<Self, PrepareErr> {
         if name.len() > COL_USERNAME_SIZE || mail.len() > COL_EMAIL_SIZE {
-            return Err(PrepareErr::SyntaxErr);
+            return Err(PrepareErr::StringTooLong);
         }
         let mut username = [0u8; COL_USERNAME_SIZE];
         username[..name.len()].copy_from_slice(name.as_bytes());

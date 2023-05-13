@@ -60,3 +60,36 @@ fn allows_insert_strings_of_maximum_length() {
         .join("\n"),
     );
 }
+
+#[test]
+fn print_error_msg_if_string_too_long() {
+    let long_username = ["a"; 33].join("");
+    let long_email = ["a"; 256].join("");
+    let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
+    let assert = cmd
+        .write_stdin(
+            [
+                &format!("insert 0 {long_username} {long_email}"),
+                "select",
+                ".exit",
+            ]
+            .join("\n"),
+        )
+        .assert();
+
+    assert
+        .success()
+        .stdout(["db > String is too long.", "db > Executed.", "db > "].join("\n"));
+}
+
+#[test]
+fn print_error_msg_if_id_is_negative() {
+    let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
+    let assert = cmd
+        .write_stdin(["insert -1 cstack foo@bar.com", "select", ".exit"].join("\n"))
+        .assert();
+
+    assert
+        .success()
+        .stdout(["db > ID must be positive.", "db > Executed.", "db > "].join("\n"));
+}
