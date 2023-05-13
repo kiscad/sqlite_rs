@@ -184,7 +184,7 @@ impl std::fmt::Display for Row {
         let email = CStr::from_bytes_until_nul(&self.email)
             .unwrap()
             .to_string_lossy();
-        write!(f, "({}, {:?}, {:?}", self.id, username, email)
+        write!(f, "({}, {:?}, {:?})", self.id, username, email)
     }
 }
 
