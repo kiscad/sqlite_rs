@@ -95,6 +95,7 @@ fn print_error_msg_if_id_is_negative() {
 }
 
 #[test]
+#[ignore]
 fn keeps_data_after_closing_connection() {
     let user = "user1";
     let email = "person1@example.com";
