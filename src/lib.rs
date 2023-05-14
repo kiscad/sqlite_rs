@@ -17,7 +17,7 @@ pub fn repl(table: &mut Table) {
     read_input(&mut input_buffer);
 
     if input_buffer.starts_with('.') {
-        match do_meta_command(&input_buffer) {
+        match do_meta_command(&input_buffer, table) {
             Err(MetaCmdErr::Unrecognized) => println!("Unrecognized command {input_buffer:?}."),
             _ => (),
         }
@@ -78,12 +78,14 @@ pub enum MetaCmdErr {
     Unrecognized,
 }
 
-fn do_meta_command(input: &InputBuffer) -> Result<(), MetaCmdErr> {
+fn do_meta_command(input: &InputBuffer, table: &mut Table) -> Result<(), MetaCmdErr> {
     match input.as_ref() {
-        ".exit" => std::process::exit(0),
+        ".exit" => {
+            table.close_db();
+            std::process::exit(0);
+        }
         _ => return Err(MetaCmdErr::Unrecognized),
     }
-    // Ok(())
 }
 
 enum Statement {
