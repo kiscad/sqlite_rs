@@ -93,3 +93,29 @@ fn print_error_msg_if_id_is_negative() {
         .success()
         .stdout(["db > ID must be positive.", "db > Executed.", "db > "].join("\n"));
 }
+
+#[test]
+fn keeps_data_after_closing_connection() {
+    let user = "user1";
+    let email = "person1@example.com";
+    Command::cargo_bin("sqlite_rs")
+        .unwrap()
+        .write_stdin([&format!("insert 0 {user} {email}"), ".exit"].join("\n"))
+        .assert()
+        .success()
+        .stdout(["db > Executed.", "db > "].join("\n"));
+
+    Command::cargo_bin("sqlite_rs")
+        .unwrap()
+        .write_stdin(["select", ".exit"].join("\n"))
+        .assert()
+        .success()
+        .stdout(
+            [
+                &format!("db > (0, {user:?}, {email:?})"),
+                "Executed.",
+                "db > ",
+            ]
+            .join("\n"),
+        );
+}
