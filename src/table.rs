@@ -3,12 +3,12 @@ use crate::row::{RowBytes, ROW_SIZE};
 use std::path::Path;
 
 pub const TABLE_MAX_PAGES: usize = 100;
-const ROWS_PER_PAGE: usize = PAGE_SIZE / ROW_SIZE;
+pub const ROWS_PER_PAGE: usize = PAGE_SIZE / ROW_SIZE;
 pub const TABLE_MAX_ROWS: usize = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
 pub struct Table {
     pub num_rows: usize,
-    pager: Pager,
+    pub pager: Pager,
 }
 
 impl Table {

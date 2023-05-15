@@ -1,12 +1,16 @@
+mod cursor;
 mod pager;
 mod row;
 mod table;
 
-use lazy_static::lazy_static;
-use regex::Regex;
-use row::{deserialize_row, serialize_row, Row};
 use std::fmt::{Display, Formatter};
 use std::num::IntErrorKind;
+
+use lazy_static::lazy_static;
+use regex::Regex;
+
+use cursor::Cursor;
+use row::{deserialize_row, serialize_row, Row};
 use table::TABLE_MAX_ROWS;
 
 pub use table::Table;
@@ -145,17 +149,20 @@ fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     if table.num_rows >= TABLE_MAX_ROWS {
         return Err(ExecErr::TableFull("Error: Table full.".to_string()));
     }
-    let row_bytes = table.row_slot(row.id as usize);
-    serialize_row(row, row_bytes);
+
+    let mut cursor = Cursor::new_at_table_end(table);
+    serialize_row(row, cursor.get_row_bytes());
+
     table.num_rows += 1;
     Ok(())
 }
 
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
-    for i in 0..table.num_rows {
-        let row_bytes = table.row_slot(i);
-        let row = deserialize_row(row_bytes);
+    let mut cursor = Cursor::new_at_table_start(table);
+    while !cursor.end_of_table {
+        let row = deserialize_row(cursor.get_row_bytes());
         println!("{row}");
+        cursor.advance();
     }
     Ok(())
 }
