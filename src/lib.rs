@@ -5,86 +5,89 @@ mod table;
 use lazy_static::lazy_static;
 use regex::Regex;
 use row::{deserialize_row, serialize_row, Row};
-use std::io::Write;
+use std::fmt::{Display, Formatter};
 use std::num::IntErrorKind;
 use table::TABLE_MAX_ROWS;
 
 pub use table::Table;
 
-pub fn repl(table: &mut Table) {
-    let mut input_buffer = InputBuffer::new();
-    print_prompt();
-    read_input(&mut input_buffer);
-
-    if input_buffer.starts_with('.') {
-        match do_meta_command(&input_buffer, table) {
-            Err(MetaCmdErr::Unrecognized) => println!("Unrecognized command {input_buffer:?}."),
-            _ => (),
-        }
-        return;
-    }
-
-    let statement = match prepare_statement(&input_buffer) {
-        Ok(stmt) => stmt,
-        Err(PrepareErr::SyntaxErr) => {
-            println!("Syntax error. Could not parse statement.");
-            return;
-        }
-        Err(PrepareErr::StringTooLong) => {
-            println!("String is too long.");
-            return;
-        }
-        Err(PrepareErr::NegativeId) => {
-            println!("ID must be positive.");
-            return;
-        }
-        Err(PrepareErr::Unrecognized) => {
-            println!("Unrecognized keyword at start of {input_buffer:?}.");
-            return;
-        }
-    };
-
-    match execute_statement(&statement, table) {
-        Ok(_) => println!("Executed."),
-        Err(ExecErr::TableFull) => {
-            println!("Error: Table full.");
-            return;
-        }
-    }
-}
-
-type InputBuffer = String;
-
-fn print_prompt() {
-    print!("db > ");
-    std::io::stdout().flush().unwrap();
-}
-
-fn read_input(input_buffer: &mut InputBuffer) {
-    match std::io::stdin().read_line(input_buffer) {
-        Ok(_) => {
-            if input_buffer.ends_with('\n') {
-                input_buffer.pop();
-            }
-        }
-        Err(_) => {
-            println!("Error reading input!");
-            std::process::exit(1);
-        }
-    }
-}
-
+#[derive(Debug)]
 pub enum MetaCmdErr {
-    Unrecognized,
+    Unrecognized(String),
 }
 
-fn do_meta_command(input: &InputBuffer, table: &mut Table) -> Result<(), MetaCmdErr> {
-    match input.as_ref() {
+impl Display for MetaCmdErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unrecognized(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl std::error::Error for MetaCmdErr {}
+
+#[derive(Debug)]
+pub enum PrepareErr {
+    Unrecognized(String),
+    SyntaxErr(String),
+    StringTooLong(String),
+    NegativeId(String),
+}
+
+impl Display for PrepareErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SyntaxErr(s)
+            | Self::Unrecognized(s)
+            | Self::NegativeId(s)
+            | Self::StringTooLong(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl std::error::Error for PrepareErr {}
+
+#[derive(Debug)]
+pub enum ExecErr {
+    TableFull(String),
+}
+
+impl Display for ExecErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TableFull(s) => write!(f, "{s}"),
+        }
+    }
+}
+
+impl std::error::Error for ExecErr {}
+
+#[derive(Debug)]
+pub enum DbError {
+    MetaCmdErr(MetaCmdErr),
+    PrepareErr(PrepareErr),
+    ExecErr(ExecErr),
+}
+
+pub fn run_cmd(cmd_str: &str, table: &mut Table) -> Result<(), DbError> {
+    if cmd_str.starts_with('.') {
+        return do_meta_command(cmd_str, table).map_err(|e| DbError::MetaCmdErr(e));
+    }
+
+    let statement = prepare_statement(cmd_str).map_err(|e| DbError::PrepareErr(e))?;
+
+    execute_statement(&statement, table).map_err(|e| DbError::ExecErr(e))
+}
+
+fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
+    match cmd_str.as_ref() {
         ".exit" => {
             table.close_db();
             std::process::exit(0);
         }
-        _ => return Err(MetaCmdErr::Unrecognized),
+        _ => Err(MetaCmdErr::Unrecognized(format!(
+            "Unrecognized command {cmd_str:?}."
+        ))),
     }
 }
 
@@ -93,14 +96,7 @@ enum Statement {
     Select,
 }
 
-pub enum PrepareErr {
-    Unrecognized,
-    SyntaxErr,
-    StringTooLong,
-    NegativeId,
-}
-
-fn prepare_statement(input: &InputBuffer) -> Result<Statement, PrepareErr> {
+fn prepare_statement(cmd_str: &str) -> Result<Statement, PrepareErr> {
     lazy_static! {
         static ref RE_INSERT: Regex = Regex::new(
             r"(?x)
@@ -115,22 +111,25 @@ fn prepare_statement(input: &InputBuffer) -> Result<Statement, PrepareErr> {
         )
         .unwrap();
     }
-    match input {
-        s if s.starts_with("insert") => match RE_INSERT.captures(input) {
+    let syntax_err = "Syntax error. Could not parse statement.".to_string();
+    match cmd_str {
+        s if s.starts_with("insert") => match RE_INSERT.captures(cmd_str) {
             Some(cap) => {
                 let id = match cap[1].parse::<u32>() {
                     Ok(v) => v,
                     Err(e) if e.kind() == &IntErrorKind::InvalidDigit => {
-                        return Err(PrepareErr::NegativeId)
+                        return Err(PrepareErr::NegativeId("ID must be positive.".to_string()))
                     }
-                    Err(_) => return Err(PrepareErr::SyntaxErr),
+                    Err(_) => return Err(PrepareErr::SyntaxErr(syntax_err)),
                 };
                 Ok(Statement::Insert(Row::build(id, &cap[2], &cap[3])?))
             }
-            None => Err(PrepareErr::SyntaxErr),
+            None => Err(PrepareErr::SyntaxErr(syntax_err)),
         },
         s if s.starts_with("select") => Ok(Statement::Select),
-        _ => Err(PrepareErr::Unrecognized),
+        _ => Err(PrepareErr::Unrecognized(format!(
+            "Unrecognized keyword at start of {cmd_str:?}."
+        ))),
     }
 }
 
@@ -142,24 +141,20 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
     }
 }
 
-enum ExecErr {
-    TableFull,
-}
-
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     if table.num_rows >= TABLE_MAX_ROWS {
-        return Err(ExecErr::TableFull);
+        return Err(ExecErr::TableFull("Error: Table full.".to_string()));
     }
-    let rowb = table.row_slot(row.id as usize);
-    serialize_row(row, rowb);
+    let row_bytes = table.row_slot(row.id as usize);
+    serialize_row(row, row_bytes);
     table.num_rows += 1;
     Ok(())
 }
 
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
     for i in 0..table.num_rows {
-        let rowb = table.row_slot(i);
-        let row = deserialize_row(rowb);
+        let row_bytes = table.row_slot(i);
+        let row = deserialize_row(row_bytes);
         println!("{row}");
     }
     Ok(())

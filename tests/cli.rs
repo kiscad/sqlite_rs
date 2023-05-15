@@ -1,6 +1,4 @@
 use assert_cmd::Command;
-use predicates::prelude::predicate;
-use std::fs::OpenOptions;
 
 #[test]
 fn insert_and_retrieve_a_row() {
@@ -39,9 +37,7 @@ fn table_is_full() {
 
     let _ = std::fs::remove_file(filename);
 
-    assert
-        .success()
-        .stdout(predicate::str::contains("Error: Table full."));
+    assert.success().stderr("Error: Table full.\n");
 }
 
 #[test]
@@ -85,21 +81,15 @@ fn print_error_msg_if_string_too_long() {
     let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
     let assert = cmd
         .arg(filename)
-        .write_stdin(
-            [
-                &format!("insert 0 {long_username} {long_email}"),
-                "select",
-                ".exit",
-            ]
-            .join("\n"),
-        )
+        .write_stdin([&format!("insert 0 {long_username} {long_email}"), ".exit"].join("\n"))
         .assert();
 
     let _ = std::fs::remove_file(filename);
 
     assert
         .success()
-        .stdout(["db > String is too long.", "db > Executed.", "db > "].join("\n"));
+        .stderr("String is too long.\n")
+        .stdout("db > db > ");
 }
 
 #[test]
@@ -109,14 +99,15 @@ fn print_error_msg_if_id_is_negative() {
     let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
     let assert = cmd
         .arg(filename)
-        .write_stdin(["insert -1 cstack foo@bar.com", "select", ".exit"].join("\n"))
+        .write_stdin(["insert -1 foo foo@bar.com", ".exit"].join("\n"))
         .assert();
 
     let _ = std::fs::remove_file(filename);
 
     assert
         .success()
-        .stdout(["db > ID must be positive.", "db > Executed.", "db > "].join("\n"));
+        .stdout("db > db > ")
+        .stderr("ID must be positive.\n");
 }
 
 #[test]

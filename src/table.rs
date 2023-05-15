@@ -1,5 +1,5 @@
 use crate::pager::{Pager, PAGE_SIZE};
-use crate::row::{RowB, ROW_SIZE};
+use crate::row::{RowBytes, ROW_SIZE};
 use std::path::Path;
 
 pub const TABLE_MAX_PAGES: usize = 100;
@@ -12,15 +12,15 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn row_slot(&mut self, row_num: usize) -> RowB {
+    pub fn row_slot(&mut self, row_num: usize) -> RowBytes {
         let page_num = row_num / ROWS_PER_PAGE;
         let page = self.pager.get_page(page_num).unwrap();
         let row_offset = row_num % ROWS_PER_PAGE;
         let byte_offset = row_offset * ROW_SIZE;
-        RowB(&mut page.0[byte_offset..byte_offset + ROW_SIZE])
+        RowBytes(&mut page.0[byte_offset..byte_offset + ROW_SIZE])
     }
 
-    pub fn open_db(filename: &Path) -> Result<Self, String> {
+    pub fn open_db(filename: impl AsRef<Path>) -> Result<Self, String> {
         let pager = Pager::open_pager(filename)?;
         let num_rows = pager.file_len / ROW_SIZE;
         Ok(Self { num_rows, pager })

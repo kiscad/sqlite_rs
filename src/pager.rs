@@ -12,7 +12,7 @@ pub struct Pager {
 }
 
 impl Pager {
-    pub fn open_pager(filename: &Path) -> Result<Self, String> {
+    pub fn open_pager(filename: impl AsRef<Path>) -> Result<Self, String> {
         let file = OpenOptions::new()
             .write(true)
             .read(true)
@@ -52,7 +52,7 @@ impl Pager {
                     .unwrap();
                 self.file.read(&mut buffer).map_err(|e| {
                     println!("Error reading file: {e}");
-                    "ExotFailure".to_string()
+                    "ExitFailure".to_string()
                 })?;
             }
             let _ = page.insert(Box::new(Page(buffer)));
@@ -81,9 +81,3 @@ impl Pager {
 }
 
 pub struct Page(pub [u8; PAGE_SIZE]);
-
-impl Page {
-    pub fn new() -> Self {
-        Self([0; PAGE_SIZE])
-    }
-}

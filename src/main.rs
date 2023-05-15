@@ -1,20 +1,58 @@
 use sqlite_rs::Table;
+use std::io::Write;
+use std::process;
 
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.is_empty() {
-        println!("Must supply a database filename.");
-        std::process::exit(1);
-    }
-    let filename = &args[0];
-    let mut table = match Table::open_db(filename.as_ref()) {
-        Ok(t) => t,
-        Err(e) => {
-            println!("{e}");
-            std::process::exit(1);
-        }
-    };
+    let filename = parse_args(&args).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        process::exit(1);
+    });
+
+    let mut table = Table::open_db(filename).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        process::exit(1);
+    });
+
     loop {
-        sqlite_rs::repl(&mut table);
+        let mut cmd_line = String::new();
+
+        print_prompt();
+        read_command(&mut cmd_line);
+
+        use sqlite_rs::DbError;
+        match sqlite_rs::run_cmd(&cmd_line, &mut table) {
+            Ok(_) => println!("Executed."),
+            Err(DbError::MetaCmdErr(e)) => eprintln!("{e}"),
+            Err(DbError::PrepareErr(e)) => eprintln!("{e}"),
+            Err(DbError::ExecErr(e)) => eprintln!("{e}"),
+        }
+    }
+}
+
+fn parse_args(args: &[String]) -> Result<&str, String> {
+    if args.is_empty() {
+        Err("Must supply a database filename.".to_string())
+    } else {
+        Ok(&args[0])
+    }
+}
+
+fn print_prompt() {
+    print!("db > ");
+    std::io::stdout().flush().unwrap();
+}
+
+fn read_command(input_buffer: &mut String) {
+    match std::io::stdin().read_line(input_buffer) {
+        Ok(_) => {
+            if input_buffer.ends_with('\n') {
+                input_buffer.pop();
+            }
+        }
+        Err(_) => {
+            println!("Error reading input!");
+            process::exit(1);
+        }
     }
 }

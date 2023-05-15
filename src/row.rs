@@ -15,7 +15,7 @@ pub struct Row {
 impl Row {
     pub fn build(id: u32, name: &str, mail: &str) -> Result<Self, PrepareErr> {
         if name.len() > COL_USERNAME_SIZE || mail.len() > COL_EMAIL_SIZE {
-            return Err(PrepareErr::StringTooLong);
+            return Err(PrepareErr::StringTooLong("String is too long.".to_string()));
         }
         let mut username = [0u8; COL_USERNAME_SIZE];
         username[..name.len()].copy_from_slice(name.as_bytes());
@@ -51,23 +51,23 @@ impl std::fmt::Display for Row {
 const ID_SIZE: usize = std::mem::size_of::<u32>();
 const USERNAME_SIZE: usize = COL_USERNAME_SIZE;
 const EMAIL_SIZE: usize = COL_EMAIL_SIZE;
-const ID_OFFSET: usize = 0;
-const USERNAME_OFFSET: usize = ID_OFFSET + ID_SIZE;
-const EMAIL_OFFSET: usize = USERNAME_OFFSET + USERNAME_SIZE;
+// const ID_OFFSET: usize = 0;
+// const USERNAME_OFFSET: usize = ID_OFFSET + ID_SIZE;
+// const EMAIL_OFFSET: usize = USERNAME_OFFSET + USERNAME_SIZE;
 pub const ROW_SIZE: usize = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 
-pub struct RowB<'a>(pub &'a mut [u8]);
+pub struct RowBytes<'a>(pub &'a mut [u8]);
 
-pub fn serialize_row(row: &Row, rowb: RowB) {
-    let mut w = std::io::Cursor::new(rowb.0);
+pub fn serialize_row(row: &Row, row_bytes: RowBytes) {
+    let mut w = std::io::Cursor::new(row_bytes.0);
     let id_bytes: [u8; 4] = row.id.to_be_bytes();
     w.write(&id_bytes).unwrap();
     w.write(&row.username).unwrap();
     w.write(&row.email).unwrap();
 }
 
-pub fn deserialize_row(rowb: RowB) -> Row {
-    let mut w = std::io::Cursor::new(rowb.0);
+pub fn deserialize_row(row_bytes: RowBytes) -> Row {
+    let mut w = std::io::Cursor::new(row_bytes.0);
     let mut buf = [0u8; 4];
     w.read(&mut buf).unwrap();
     let id = u32::from_be_bytes(buf);
