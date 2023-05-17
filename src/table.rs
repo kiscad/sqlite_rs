@@ -1,43 +1,41 @@
+use crate::btree::Node;
 use crate::pager::{Pager, PAGE_SIZE};
 use crate::row::ROW_SIZE;
 use std::path::Path;
 
 pub const TABLE_MAX_PAGES: usize = 100;
-pub const ROWS_PER_PAGE: usize = PAGE_SIZE / ROW_SIZE;
-pub const TABLE_MAX_ROWS: usize = ROWS_PER_PAGE * TABLE_MAX_PAGES;
+pub const ROWS_PER_PAGE: usize = PAGE_SIZE / ROW_SIZE; // TODO: remove
+pub const TABLE_MAX_ROWS: usize = ROWS_PER_PAGE * TABLE_MAX_PAGES; // TODO: remove
 
 pub struct Table {
-    pub num_rows: usize,
     pub pager: Pager,
+    pub root_page_num: usize,
 }
 
 impl Table {
     pub fn open_db(filename: impl AsRef<Path>) -> Result<Self, String> {
-        let pager = Pager::open_pager(filename)?;
-        let num_rows = pager.file_len / ROW_SIZE;
-        Ok(Self { num_rows, pager })
+        let mut pager = Pager::open_pager(filename)?;
+        // TODO: 放在这里没必要
+        if pager.num_pages == 0 {
+            let node = match Node::new(pager.get_page(0).unwrap()) {
+                Node::LeafNode(nd) => nd,
+                _ => unreachable!(),
+            };
+            node.initialize();
+        }
+
+        Ok(Self {
+            root_page_num: 0,
+            pager,
+        })
     }
 
     pub fn close_db(&mut self) {
-        let num_full_pages = self.num_rows / ROWS_PER_PAGE;
-        for i in 0..num_full_pages {
+        for i in 0..self.pager.pages.len() {
             if self.pager.pages[i].is_some() {
-                let res = self.pager.flush_pager(i, PAGE_SIZE);
-                if res.is_err() {
-                    std::process::exit(1);
-                }
-            }
-        }
-        let num_additional_rows = self.num_rows % ROWS_PER_PAGE;
-        if num_additional_rows > 0 {
-            let page_num = num_full_pages;
-            if self.pager.pages[page_num].is_some() {
-                let res = self
-                    .pager
-                    .flush_pager(page_num, num_additional_rows * ROW_SIZE);
-                if res.is_err() {
-                    std::process::exit(1);
-                }
+                self.pager
+                    .flush_pager(i)
+                    .unwrap_or_else(|_| std::process::exit(1));
             }
         }
     }

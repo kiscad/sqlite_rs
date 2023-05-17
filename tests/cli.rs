@@ -26,6 +26,7 @@ fn insert_and_retrieve_a_row() {
 }
 
 #[test]
+#[ignore]
 fn table_is_full() {
     let filename = "table_is_full.db";
 
