@@ -1,6 +1,3 @@
-#![feature(iter_array_chunks)]
-#![feature(split_array)]
-
 mod btree;
 mod cursor;
 mod pager;
@@ -14,10 +11,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use cursor::Cursor;
-use row::{deserialize_row, serialize_row, Row};
-use table::TABLE_MAX_ROWS;
+use row::Row;
 
-use crate::btree::{Node, LEAF_NODE_MAX_CELLS};
 pub use table::Table;
 
 #[derive(Debug)]
@@ -151,19 +146,8 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
 }
 
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
-    let node = table.pager.get_leaf_node(table.root_page_num).unwrap();
-
-    if node.get_num_cells() as usize >= LEAF_NODE_MAX_CELLS {
-        return Err(ExecErr::TableFull("Error: Table full.".to_string()));
-    }
-
     let mut cursor = Cursor::new_at_table_end(table);
-    let cell_num = cursor.cell_num as u32;
-    let page_num = cursor.page_num;
-    let mut node = table.pager.get_leaf_node(page_num).unwrap();
-    node.write_cell_value(cell_num, |w| row.serialize_to(w));
-    // serialize_row(row, cursor.get_row_bytes());
-    // leaf_node_insert(cursor, row.id, row);
+    row.write_to(&mut cursor);
 
     Ok(())
 }
@@ -171,8 +155,9 @@ fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
     let mut cursor = Cursor::new_at_table_start(table);
     while !cursor.end_of_table {
-        // let row = deserialize_row(cursor.get_row_bytes());
-        // println!("{row}");
+        let mut row = Row::default();
+        row.read_from(&mut cursor);
+        println!("{row}");
         cursor.advance();
     }
     Ok(())

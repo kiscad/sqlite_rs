@@ -1,11 +1,12 @@
 use super::PrepareErr;
 use crate::cursor::Cursor;
 use std::fmt::Formatter;
-use std::fs::read;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 
 const COL_USERNAME_SIZE: usize = 32;
 const COL_EMAIL_SIZE: usize = 255;
+
+pub type RowBytes = [u8; ROW_SIZE];
 
 #[derive(Debug)]
 pub struct Row {
@@ -28,14 +29,6 @@ impl Row {
             username,
             email,
         })
-    }
-
-    fn new(id: u32, username: [u8; COL_USERNAME_SIZE], email: [u8; COL_EMAIL_SIZE]) -> Self {
-        Self {
-            id,
-            username,
-            email,
-        }
     }
 
     pub fn default() -> Self {
@@ -67,41 +60,25 @@ const EMAIL_SIZE: usize = COL_EMAIL_SIZE;
 // const EMAIL_OFFSET: usize = USERNAME_OFFSET + USERNAME_SIZE;
 pub const ROW_SIZE: usize = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 
-pub struct RowBytes<'a>(pub &'a mut [u8]);
-
 impl Row {
-    pub fn serialize_to(&self, mut writer: std::io::Cursor<&mut [u8]>) {
+    pub fn write_to(&self, cursor: &mut Cursor) {
+        let mut buf = [0u8; ROW_SIZE];
+        let mut writer = io::Cursor::new(&mut buf[..]);
         writer.write(&self.id.to_be_bytes()).unwrap();
         writer.write(&self.username).unwrap();
         writer.write(&self.email).unwrap();
+        cursor.write_row_bytes(&buf);
     }
 
-    pub fn deserialize_from(&mut self, mut reader: std::io::Cursor<&mut &mut [u8]>) {
+    pub fn read_from(&mut self, cursor: &mut Cursor) {
+        let mut buf = [0u8; ROW_SIZE];
+        cursor.read_row_bytes(&mut buf);
+
+        let mut reader = io::Cursor::new(&buf[..]);
         let mut id = [0u8; ID_SIZE];
         reader.read(&mut id).unwrap();
         self.id = u32::from_be_bytes(id);
         reader.read(&mut self.username).unwrap();
         reader.read(&mut self.email).unwrap();
     }
-}
-
-pub fn serialize_row(row: &Row, row_bytes: RowBytes) {
-    let mut w = std::io::Cursor::new(row_bytes.0);
-    let id_bytes: [u8; 4] = row.id.to_be_bytes();
-    w.write(&id_bytes).unwrap();
-    w.write(&row.username).unwrap();
-    w.write(&row.email).unwrap();
-}
-
-pub fn deserialize_row(row_bytes: RowBytes) -> Row {
-    let mut w = std::io::Cursor::new(row_bytes.0);
-
-    let mut id = [0u8; ID_SIZE];
-    w.read(&mut id).unwrap();
-    let mut username = [0u8; USERNAME_SIZE];
-    w.read(&mut username).unwrap();
-    let mut email = [0u8; EMAIL_SIZE];
-    w.read(&mut email).unwrap();
-
-    Row::new(u32::from_be_bytes(id), username, email)
 }

@@ -5,14 +5,13 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 pub const PAGE_SIZE: usize = 4096;
-
-pub struct Page(pub [u8; PAGE_SIZE]);
+pub type Page = [u8; PAGE_SIZE];
 
 pub struct Pager {
     file: File,
     pub file_len: usize,
     pub num_pages: usize,
-    pub pages: [Option<Box<Page>>; TABLE_MAX_PAGES],
+    pub pages: [Option<Box<Node>>; TABLE_MAX_PAGES],
 }
 
 impl Pager {
@@ -34,7 +33,7 @@ impl Pager {
             return Err("ExitFailure".to_string());
         }
 
-        const INIT: Option<Box<Page>> = None;
+        const INIT: Option<Box<Node>> = None;
         let pages = [INIT; TABLE_MAX_PAGES];
         Ok(Self {
             file,
@@ -44,8 +43,7 @@ impl Pager {
         })
     }
 
-    // TODO: change to get_node, table should not depend on page directly.
-    pub fn get_page(&mut self, page_num: usize) -> Result<&mut Box<Page>, String> {
+    pub fn get_page(&mut self, page_num: usize) -> Result<&mut Box<Node>, String> {
         if page_num > TABLE_MAX_PAGES {
             println!("Tried to fetch page number out of bounds. {page_num} > {TABLE_MAX_PAGES}");
             return Err("ExitFailure".to_string());
@@ -64,7 +62,9 @@ impl Pager {
                     "ExitFailure".to_string()
                 })?;
             }
-            let _ = page.insert(Box::new(Page(buffer)));
+            let mut node = LeafNode::default();
+            node.read_page(&buffer);
+            let _ = page.insert(Box::new(Node::LeafNode(node)));
         }
 
         if page_num >= self.num_pages {
@@ -72,13 +72,6 @@ impl Pager {
         }
 
         Ok(page.as_mut().unwrap())
-    }
-
-    pub fn get_leaf_node(&mut self, page_num: usize) -> Result<LeafNode, String> {
-        match Node::new(self.get_page(page_num)?) {
-            Node::LeafNode(nd) => Ok(nd),
-            _ => unreachable!(),
-        }
     }
 
     pub fn flush_pager(&mut self, page_num: usize) -> Result<(), String> {
@@ -92,8 +85,15 @@ impl Pager {
                 println!("Error seeking.");
                 "ExitFailure".to_string()
             })?;
-        let buf = &self.pages[page_num].as_ref().unwrap().as_ref().0;
-        self.file.write(buf).map_err(|_| {
+
+        let node = self.pages[page_num].as_ref().unwrap().as_ref();
+        let mut buf = [0; PAGE_SIZE];
+        match node {
+            Node::LeafNode(nd) => nd.write_page(&mut buf),
+            _ => unreachable!(),
+        };
+
+        self.file.write(&buf).map_err(|_| {
             println!("Error writing.");
             "ExitFailure".to_string()
         })?;
