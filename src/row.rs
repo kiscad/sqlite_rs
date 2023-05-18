@@ -64,9 +64,9 @@ impl Row {
     pub fn write_to(&self, cursor: &mut Cursor) {
         let mut buf = [0u8; ROW_SIZE];
         let mut writer = io::Cursor::new(&mut buf[..]);
-        writer.write(&self.id.to_be_bytes()).unwrap();
-        writer.write(&self.username).unwrap();
-        writer.write(&self.email).unwrap();
+        writer.write_all(&self.id.to_be_bytes()).unwrap();
+        writer.write_all(&self.username).unwrap();
+        writer.write_all(&self.email).unwrap();
         cursor.write_row_bytes(&buf);
     }
 
@@ -76,9 +76,9 @@ impl Row {
 
         let mut reader = io::Cursor::new(&buf[..]);
         let mut id = [0u8; ID_SIZE];
-        reader.read(&mut id).unwrap();
+        reader.read_exact(&mut id).unwrap();
         self.id = u32::from_be_bytes(id);
-        reader.read(&mut self.username).unwrap();
-        reader.read(&mut self.email).unwrap();
+        reader.read_exact(&mut self.username).unwrap();
+        reader.read_exact(&mut self.email).unwrap();
     }
 }

@@ -1,7 +1,6 @@
 use crate::pager::Page;
 use crate::row::{RowBytes, ROW_SIZE};
 use std::io::{self, Read, Write};
-use std::mem;
 
 /*
  * Common Node Header Layout
@@ -65,11 +64,11 @@ impl LeafNode {
 
         let mut is_leaf = [0; 1];
         reader.read_exact(&mut is_leaf).unwrap();
-        self.is_leaf = unsafe { mem::transmute(is_leaf[0]) };
+        self.is_leaf = is_leaf[0] != 0;
 
         let mut is_root = [0; 1];
         reader.read_exact(&mut is_root).unwrap();
-        self.is_root = unsafe { mem::transmute(is_root[0]) };
+        self.is_root = is_root[0] != 0;
 
         let mut parent_pointer = [0; 4];
         reader.read_exact(&mut parent_pointer).unwrap();
@@ -91,15 +90,15 @@ impl LeafNode {
 
     pub fn write_page(&self, page: &mut Page) {
         let mut writer = io::Cursor::new(&mut page[..]);
-        writer.write(&[u8::from(self.is_leaf)]).unwrap();
-        writer.write(&[u8::from(self.is_root)]).unwrap();
+        writer.write_all(&[u8::from(self.is_leaf)]).unwrap();
+        writer.write_all(&[u8::from(self.is_root)]).unwrap();
         writer
-            .write(&self.parent_pointer.to_be_bytes()[..])
+            .write_all(&self.parent_pointer.to_be_bytes()[..])
             .unwrap();
-        writer.write(&self.num_cells.to_be_bytes()[..]).unwrap();
+        writer.write_all(&self.num_cells.to_be_bytes()[..]).unwrap();
         for (key, val) in &self.cells {
-            writer.write(&key.to_be_bytes()[..]).unwrap();
-            writer.write(&val[..]).unwrap();
+            writer.write_all(&key.to_be_bytes()[..]).unwrap();
+            writer.write_all(&val[..]).unwrap();
         }
     }
 
@@ -114,7 +113,7 @@ impl LeafNode {
     }
 
     pub fn append_cell_value(&mut self, cell_val: &[u8; ROW_SIZE]) {
-        self.cells.push((self.num_cells, cell_val.clone()));
+        self.cells.push((self.num_cells, *cell_val));
         self.num_cells += 1;
     }
 }

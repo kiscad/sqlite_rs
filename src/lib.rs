@@ -75,16 +75,16 @@ pub enum DbError {
 
 pub fn run_cmd(cmd_str: &str, table: &mut Table) -> Result<(), DbError> {
     if cmd_str.starts_with('.') {
-        return do_meta_command(cmd_str, table).map_err(|e| DbError::MetaCmdErr(e));
+        return do_meta_command(cmd_str, table).map_err(DbError::MetaCmdErr);
     }
 
-    let statement = prepare_statement(cmd_str).map_err(|e| DbError::PrepareErr(e))?;
+    let statement = prepare_statement(cmd_str).map_err(DbError::PrepareErr)?;
 
-    execute_statement(&statement, table).map_err(|e| DbError::ExecErr(e))
+    execute_statement(&statement, table).map_err(DbError::ExecErr)
 }
 
 fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
-    match cmd_str.as_ref() {
+    match cmd_str {
         ".exit" => {
             table.close_db();
             std::process::exit(0);
@@ -96,7 +96,7 @@ fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
 }
 
 enum Statement {
-    Insert(Row),
+    Insert(Box<Row>),
     Select,
 }
 
@@ -126,7 +126,9 @@ fn prepare_statement(cmd_str: &str) -> Result<Statement, PrepareErr> {
                     }
                     Err(_) => return Err(PrepareErr::SyntaxErr(syntax_err)),
                 };
-                Ok(Statement::Insert(Row::build(id, &cap[2], &cap[3])?))
+                Ok(Statement::Insert(Box::new(Row::build(
+                    id, &cap[2], &cap[3],
+                )?)))
             }
             None => Err(PrepareErr::SyntaxErr(syntax_err)),
         },
