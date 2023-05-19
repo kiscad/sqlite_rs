@@ -20,7 +20,7 @@ fn main() {
         print_prompt();
         read_command(&mut cmd_line);
 
-        use sqlite_rs::DbError;
+        use sqlite_rs::error::DbError;
         match sqlite_rs::run_cmd(&cmd_line, &mut table) {
             Ok(_) => println!("Executed."),
             Err(DbError::MetaCmdErr(e)) => eprintln!("{e}"),
