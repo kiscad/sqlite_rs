@@ -32,10 +32,17 @@ fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
             table.close_db();
             std::process::exit(0);
         }
-        _ => Err(MetaCmdErr::Unrecognized(format!(
-            "Unrecognized command {cmd_str:?}."
-        ))),
+        ".constants" => {
+            println!("Constants:");
+            print_constants();
+        }
+        _ => {
+            return Err(MetaCmdErr::Unrecognized(format!(
+                "Unrecognized command {cmd_str:?}."
+            )));
+        }
     }
+    Ok(())
 }
 
 enum Statement {
@@ -106,4 +113,17 @@ fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
         cursor.advance();
     }
     Ok(())
+}
+
+fn print_constants() {
+    println!("ROW_SIZE:                  {}", row::ROW_SIZE);
+    println!(
+        "LEAF_NODE_HEADER_SIZE:     {}",
+        btree::LEAF_NODE_HEADER_SIZE
+    );
+    println!(
+        "LEAF_NODE_SPACE_FOR_CELLS: {}",
+        pager::PAGE_SIZE - btree::LEAF_NODE_HEADER_SIZE
+    );
+    println!("LEAF_NODE_MAX_CELLS:       {}", table::PAGE_MAX_ROWS);
 }
