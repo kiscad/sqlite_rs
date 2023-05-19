@@ -1,5 +1,8 @@
+use crate::error::ExecErr;
 use crate::pager::Page;
 use crate::row::{RowBytes, ROW_SIZE};
+use crate::table;
+use std::fmt::{Display, Formatter};
 use std::io::{self, Read, Write};
 
 /*
@@ -106,18 +109,74 @@ impl LeafNode {
         }
     }
 
-    pub fn write_cell_value(&mut self, cell_idx: usize, cell_val: &RowBytes) {
+    pub fn update_cell(&mut self, cell_idx: usize, cell_val: &RowBytes) {
         assert!(cell_idx < self.cells.len());
         let val = &mut self.cells[cell_idx].1;
         val.copy_from_slice(cell_val);
     }
 
-    pub fn read_cell_value(&self, cell_idx: usize, cell_val: &mut RowBytes) {
+    pub fn read_cell(&self, cell_idx: usize, cell_val: &mut RowBytes) {
         cell_val.copy_from_slice(&self.cells[cell_idx].1);
     }
 
-    pub fn append_cell_value(&mut self, cell_val: &RowBytes) {
-        let cell_key = 0; // currently, all cell keys are zeros.
-        self.cells.push((cell_key, *cell_val));
+    // pub fn append_cell_value(&mut self, cell_key: u32, cell_val: &RowBytes) {
+    //     // let cell_key = 0; // currently, all cell keys are zeros.
+    //     self.cells.push((cell_key, *cell_val));
+    // }
+
+    pub fn get_cell_key(&self, cell_idx: usize) -> Option<u32> {
+        Some(self.cells.get(cell_idx)?.0)
+    }
+
+    pub fn insert_cell(
+        &mut self,
+        cell_idx: usize,
+        cell_key: u32,
+        cell_val: &RowBytes,
+    ) -> Result<(), ExecErr> {
+        if self.cells.len() >= table::PAGE_MAX_ROWS {
+            return Err(ExecErr::TableFull(
+                "Need to implement splitting a leaf node.".to_string(),
+            ));
+        }
+        assert!(cell_idx <= self.cells.len());
+        self.cells.insert(cell_idx, (cell_key, *cell_val));
+
+        Ok(())
+    }
+
+    /// This function will return:
+    /// - the position of the key,
+    /// - the position of another key that we will need to move if we want to insert new cell
+    /// - the position that past the last key,
+    pub fn find_place_for_new_cell(&self, cell_key: usize) -> usize {
+        // Binary search
+        let mut lower = 0;
+        let mut upper = self.cells.len();
+        while lower < upper {
+            let mid = (lower + upper) / 2;
+            let key_mid = self.get_cell_key(mid).unwrap() as usize;
+
+            use std::cmp::Ordering::*;
+            match cell_key.cmp(&key_mid) {
+                Equal => return mid,
+                Greater => lower = mid + 1,
+                Less => upper = mid,
+            }
+        }
+        lower // cell_idx
+    }
+}
+
+impl Display for LeafNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "leaf (size {})", self.cells.len())?;
+        let cells_str: Vec<_> = self
+            .cells
+            .iter()
+            .enumerate()
+            .map(|(idx, (key, _))| format!("  - {} : {}", idx, key))
+            .collect();
+        write!(f, "{}", cells_str.join("\n"))
     }
 }

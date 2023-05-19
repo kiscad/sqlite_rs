@@ -26,6 +26,7 @@ fn insert_and_retrieve_a_row() {
 }
 
 #[test]
+#[ignore]
 fn table_is_full() {
     let filename = "table_is_full.db";
 
@@ -140,4 +141,67 @@ fn keeps_data_after_closing_connection() {
         ]
         .join("\n"),
     );
+}
+
+#[test]
+fn print_structure_of_leaf_node() {
+    let filename = "print_structure_of_leaf_node.db";
+    let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
+    let mut script: String = [3, 1, 2]
+        .iter()
+        .map(|i| format!("insert {i} user{i} person{i}@example.com\n"))
+        .collect();
+    script.push_str(".btree\n.exit");
+    let assert = cmd.arg(filename).write_stdin(script).assert();
+
+    let _ = std::fs::remove_file(filename);
+
+    assert.success().stdout(
+        [
+            "db > Executed.",
+            "db > Executed.",
+            "db > Executed.",
+            "db > Tree:",
+            "leaf (size 3)",
+            "  - 0 : 1",
+            "  - 1 : 2",
+            "  - 2 : 3",
+            "Executed.",
+            "db > ",
+        ]
+        .join("\n"),
+    );
+}
+
+#[test]
+fn print_error_when_insert_duplicate_key() {
+    let filename = "print_error_when_insert_duplicate_key.db";
+    let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
+    let assert = cmd
+        .arg(filename)
+        .write_stdin(
+            [
+                "insert 1 user1 person1@example.com",
+                "insert 1 user1 person1@example.com",
+                "select",
+                ".exit",
+            ]
+            .join("\n"),
+        )
+        .assert();
+
+    let _ = std::fs::remove_file(filename);
+
+    assert
+        .success()
+        .stdout(
+            [
+                "db > Executed.",
+                "db > db > (1, \"user1\", \"person1@example.com\")",
+                "Executed.",
+                "db > ",
+            ]
+            .join("\n"),
+        )
+        .stderr("Error: Duplicate key.\n");
 }

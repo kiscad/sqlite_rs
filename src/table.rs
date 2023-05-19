@@ -1,9 +1,7 @@
 use crate::btree;
 use crate::btree::Node;
-use crate::error::ExecErr;
 use crate::pager::{self, Pager};
 use crate::row;
-use crate::row::RowBytes;
 use std::path::Path;
 
 pub const TABLE_MAX_PAGES: usize = 100;
@@ -35,19 +33,13 @@ impl Table {
         }
     }
 
-    pub fn insert_row(&mut self, row: &RowBytes) -> Result<(), ExecErr> {
-        let node = self.pager.get_page(self.root_page_num).unwrap();
-        match node.as_mut() {
-            Node::LeafNode(nd) => {
-                if nd.cells.len() < PAGE_MAX_ROWS {
-                    nd.append_cell_value(row);
-                } else {
-                    println!("Error: Table full.");
-                    return Err(ExecErr::TableFull("Error: Table full.".to_string()));
-                }
+    pub fn find_cell(&mut self, key: u32) -> (usize, usize) {
+        let root_node = self.pager.get_page(self.root_page_num).unwrap();
+        match root_node.as_ref() {
+            Node::LeafNode(nd) => (self.root_page_num, nd.find_place_for_new_cell(key as usize)),
+            Node::InternalNode(_) => {
+                unimplemented!("Need to implement searching an internal node.")
             }
-            _ => unreachable!(),
         }
-        Ok(())
     }
 }

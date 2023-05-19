@@ -39,12 +39,14 @@ impl std::error::Error for PrepareErr {}
 #[derive(Debug)]
 pub enum ExecErr {
     TableFull(String),
+    DuplicateKey(String),
 }
 
 impl Display for ExecErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TableFull(s) => write!(f, "{s}"),
+            Self::DuplicateKey(s) => write!(f, "{s}"),
         }
     }
 }

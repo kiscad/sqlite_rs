@@ -57,18 +57,16 @@ impl std::fmt::Display for Row {
 
 impl Row {
     pub fn write_to(&self, cursor: &mut Cursor) -> Result<(), ExecErr> {
-        let mut buf = [0u8; ROW_SIZE];
-        let mut writer = io::Cursor::new(&mut buf[..]);
-        writer.write_all(&self.id.to_be_bytes()).unwrap();
-        writer.write_all(&self.username).unwrap();
-        writer.write_all(&self.email).unwrap();
-        cursor.write_row_bytes(&buf)?;
-        Ok(())
+        cursor.update_row(self.id, &self.serialize())
+    }
+
+    pub fn insert_to(&self, cursor: &mut Cursor) -> Result<(), ExecErr> {
+        cursor.insert_row(self.id, &self.serialize())
     }
 
     pub fn read_from(&mut self, cursor: &mut Cursor) {
         let mut buf = [0u8; ROW_SIZE];
-        cursor.read_row_bytes(&mut buf);
+        cursor.read_row(&mut buf);
 
         let mut reader = io::Cursor::new(&buf[..]);
         let mut id = [0u8; ID_SIZE];
@@ -76,5 +74,14 @@ impl Row {
         self.id = u32::from_be_bytes(id);
         reader.read_exact(&mut self.username).unwrap();
         reader.read_exact(&mut self.email).unwrap();
+    }
+
+    fn serialize(&self) -> RowBytes {
+        let mut buf = [0u8; ROW_SIZE];
+        let mut writer = io::Cursor::new(&mut buf[..]);
+        writer.write_all(&self.id.to_be_bytes()).unwrap();
+        writer.write_all(&self.username).unwrap();
+        writer.write_all(&self.email).unwrap();
+        buf
     }
 }

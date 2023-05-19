@@ -14,6 +14,7 @@ use cursor::Cursor;
 use error::{DbError, ExecErr, MetaCmdErr, PrepareErr};
 use row::Row;
 
+use crate::btree::Node;
 pub use table::Table;
 
 pub fn run_cmd(cmd_str: &str, table: &mut Table) -> Result<(), DbError> {
@@ -35,6 +36,14 @@ fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
         ".constants" => {
             println!("Constants:");
             print_constants();
+        }
+        ".btree" => {
+            println!("Tree:");
+            let node = table.pager.get_page(table.root_page_num).unwrap();
+            match node.as_ref() {
+                Node::LeafNode(node) => println!("{}", node),
+                _ => unreachable!(),
+            }
         }
         _ => {
             return Err(MetaCmdErr::Unrecognized(format!(
@@ -98,10 +107,9 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
 }
 
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
-    let mut cursor = Cursor::new_at_table_end(table);
-    row.write_to(&mut cursor)?;
-
-    Ok(())
+    let key = row.id;
+    let mut cursor = Cursor::find(table, key);
+    row.insert_to(&mut cursor)
 }
 
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
