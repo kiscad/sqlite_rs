@@ -31,7 +31,8 @@ use std::io::{self, Read, Write};
 // const LEAF_NODE_SPACE_FOR_CELLS: usize = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
 // pub const LEAF_NODE_MAX_CELLS: usize = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
 
-pub const LEAF_NODE_METADATA_SIZE: usize = 1 + 1 + 4 + 4;
+pub const LEAF_NODE_HEADER_SIZE: usize = 1 + 1 + 4 + 4;
+pub const CELL_KEY_SIZE: usize = 4;
 
 pub enum Node {
     InternalNode(InternalNode),
@@ -105,17 +106,17 @@ impl LeafNode {
         }
     }
 
-    pub fn write_cell_value(&mut self, cell_idx: usize, cell_val: &[u8; ROW_SIZE]) {
+    pub fn write_cell_value(&mut self, cell_idx: usize, cell_val: &RowBytes) {
         assert!(cell_idx < self.cells.len());
         let val = &mut self.cells[cell_idx].1;
         val.copy_from_slice(cell_val);
     }
 
-    pub fn read_cell_value(&self, cell_idx: usize, cell_val: &mut [u8; ROW_SIZE]) {
+    pub fn read_cell_value(&self, cell_idx: usize, cell_val: &mut RowBytes) {
         cell_val.copy_from_slice(&self.cells[cell_idx].1);
     }
 
-    pub fn append_cell_value(&mut self, cell_val: &[u8; ROW_SIZE]) {
+    pub fn append_cell_value(&mut self, cell_val: &RowBytes) {
         let cell_key = 0; // currently, all cell keys are zeros.
         self.cells.push((cell_key, *cell_val));
     }

@@ -1,13 +1,14 @@
 use crate::btree;
 use crate::btree::Node;
+use crate::error::ExecErr;
 use crate::pager::{self, Pager};
 use crate::row;
 use crate::row::RowBytes;
 use std::path::Path;
 
 pub const TABLE_MAX_PAGES: usize = 100;
-pub const PAGE_MAX_ROWS: usize =
-    (pager::PAGE_SIZE - btree::LEAF_NODE_METADATA_SIZE) / row::ROW_SIZE;
+const CELL_SIZE: usize = row::ROW_SIZE + btree::CELL_KEY_SIZE;
+pub const PAGE_MAX_ROWS: usize = (pager::PAGE_SIZE - btree::LEAF_NODE_HEADER_SIZE) / CELL_SIZE;
 
 pub struct Table {
     pub pager: Pager,
@@ -34,15 +35,15 @@ impl Table {
         }
     }
 
-    pub fn insert_row(&mut self, row: &RowBytes) -> Result<(), String> {
+    pub fn insert_row(&mut self, row: &RowBytes) -> Result<(), ExecErr> {
         let node = self.pager.get_page(self.root_page_num).unwrap();
         match node.as_mut() {
             Node::LeafNode(nd) => {
                 if nd.cells.len() < PAGE_MAX_ROWS {
                     nd.append_cell_value(row);
                 } else {
-                    eprintln!("Table is full.");
-                    std::process::exit(1);
+                    println!("Error: Table full.");
+                    return Err(ExecErr::TableFull("Error: Table full.".to_string()));
                 }
             }
             _ => unreachable!(),

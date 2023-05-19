@@ -92,7 +92,7 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
 
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     let mut cursor = Cursor::new_at_table_end(table);
-    row.write_to(&mut cursor);
+    row.write_to(&mut cursor)?;
 
     Ok(())
 }

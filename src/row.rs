@@ -1,5 +1,6 @@
 use super::PrepareErr;
 use crate::cursor::Cursor;
+use crate::error::ExecErr;
 use std::fmt::Formatter;
 use std::io::{self, Read, Write};
 
@@ -55,13 +56,14 @@ impl std::fmt::Display for Row {
 }
 
 impl Row {
-    pub fn write_to(&self, cursor: &mut Cursor) {
+    pub fn write_to(&self, cursor: &mut Cursor) -> Result<(), ExecErr> {
         let mut buf = [0u8; ROW_SIZE];
         let mut writer = io::Cursor::new(&mut buf[..]);
         writer.write_all(&self.id.to_be_bytes()).unwrap();
         writer.write_all(&self.username).unwrap();
         writer.write_all(&self.email).unwrap();
-        cursor.write_row_bytes(&buf);
+        cursor.write_row_bytes(&buf)?;
+        Ok(())
     }
 
     pub fn read_from(&mut self, cursor: &mut Cursor) {

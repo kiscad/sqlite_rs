@@ -1,4 +1,5 @@
 use crate::btree::Node;
+use crate::error::ExecErr;
 use crate::row::RowBytes;
 use crate::Table;
 
@@ -48,18 +49,19 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn write_row_bytes(&mut self, buf: &RowBytes) {
+    pub fn write_row_bytes(&mut self, buf: &RowBytes) -> Result<(), ExecErr> {
         let node = self.table.pager.get_page(self.page_idx).unwrap();
         match node.as_mut() {
             Node::LeafNode(nd) => {
                 if self.end_of_table {
-                    self.table.insert_row(buf).unwrap();
+                    self.table.insert_row(buf)?;
                 } else {
-                    nd.write_cell_value(self.cell_idx, buf)
+                    nd.write_cell_value(self.cell_idx, buf);
                 }
             }
             _ => unreachable!(),
         }
+        Ok(())
     }
 
     pub fn advance(&mut self) {

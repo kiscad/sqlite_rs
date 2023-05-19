@@ -26,12 +26,11 @@ fn insert_and_retrieve_a_row() {
 }
 
 #[test]
-#[ignore]
 fn table_is_full() {
     let filename = "table_is_full.db";
 
     let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
-    let script: String = (0..1401)
+    let script: String = (0..14)
         .map(|i| format!("insert {i} user{i} person{i}@example.com\n"))
         .collect();
     let assert = cmd.arg(filename).write_stdin(script + ".exit").assert();
