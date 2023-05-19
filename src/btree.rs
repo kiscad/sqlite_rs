@@ -31,6 +31,8 @@ use std::io::{self, Read, Write};
 // const LEAF_NODE_SPACE_FOR_CELLS: usize = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
 // pub const LEAF_NODE_MAX_CELLS: usize = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
 
+pub const LEAF_NODE_METADATA_SIZE: usize = 1 + 1 + 4 + 4;
+
 pub enum Node {
     InternalNode(InternalNode),
     LeafNode(LeafNode),
@@ -46,7 +48,7 @@ pub struct LeafNode {
     is_leaf: bool,
     is_root: bool,
     parent_pointer: u32,
-    pub num_cells: u32,
+    // pub num_cells: u32, // to be remove
     pub cells: Vec<(u32, RowBytes)>,
 }
 
@@ -76,10 +78,10 @@ impl LeafNode {
 
         let mut num_cells = [0; 4];
         reader.read_exact(&mut num_cells).unwrap();
-        self.num_cells = u32::from_be_bytes(num_cells);
+        let num_cells = u32::from_be_bytes(num_cells);
 
         self.cells.clear();
-        for _ in 0..self.num_cells {
+        for _ in 0..num_cells {
             let mut key = [0; 4];
             reader.read_exact(&mut key).unwrap();
             let mut val = [0; ROW_SIZE];
@@ -93,27 +95,28 @@ impl LeafNode {
         writer.write_all(&[u8::from(self.is_leaf)]).unwrap();
         writer.write_all(&[u8::from(self.is_root)]).unwrap();
         writer
-            .write_all(&self.parent_pointer.to_be_bytes()[..])
+            .write_all(&self.parent_pointer.to_be_bytes())
             .unwrap();
-        writer.write_all(&self.num_cells.to_be_bytes()[..]).unwrap();
+        let num_cells = self.cells.len() as u32;
+        writer.write_all(&num_cells.to_be_bytes()).unwrap();
         for (key, val) in &self.cells {
-            writer.write_all(&key.to_be_bytes()[..]).unwrap();
-            writer.write_all(&val[..]).unwrap();
+            writer.write_all(&key.to_be_bytes()).unwrap();
+            writer.write_all(val).unwrap();
         }
     }
 
-    pub fn write_cell_value(&mut self, cell_key: u32, cell_val: &[u8; ROW_SIZE]) {
-        if cell_key == self.num_cells {}
-        let val = &mut self.cells[cell_key as usize].1;
+    pub fn write_cell_value(&mut self, cell_idx: usize, cell_val: &[u8; ROW_SIZE]) {
+        assert!(cell_idx < self.cells.len());
+        let val = &mut self.cells[cell_idx].1;
         val.copy_from_slice(cell_val);
     }
 
-    pub fn read_cell_value(&self, cell_key: u32, cell_val: &mut [u8; ROW_SIZE]) {
-        cell_val.copy_from_slice(&self.cells[cell_key as usize].1);
+    pub fn read_cell_value(&self, cell_idx: usize, cell_val: &mut [u8; ROW_SIZE]) {
+        cell_val.copy_from_slice(&self.cells[cell_idx].1);
     }
 
     pub fn append_cell_value(&mut self, cell_val: &[u8; ROW_SIZE]) {
-        self.cells.push((self.num_cells, *cell_val));
-        self.num_cells += 1;
+        let cell_key = 0; // currently, all cell keys are zeros.
+        self.cells.push((cell_key, *cell_val));
     }
 }
