@@ -64,9 +64,9 @@ impl Row {
         cursor.insert_row(self.id, &self.serialize())
     }
 
-    pub fn read_from(&mut self, cursor: &mut Cursor) {
+    pub fn read_from(&mut self, cursor: &mut Cursor) -> Result<(), ExecErr> {
         let mut buf = [0u8; ROW_SIZE];
-        cursor.read_row(&mut buf);
+        cursor.read_row(&mut buf)?;
 
         let mut reader = io::Cursor::new(&buf[..]);
         let mut id = [0u8; ID_SIZE];
@@ -74,6 +74,7 @@ impl Row {
         self.id = u32::from_be_bytes(id);
         reader.read_exact(&mut self.username).unwrap();
         reader.read_exact(&mut self.email).unwrap();
+        Ok(())
     }
 
     fn serialize(&self) -> RowBytes {

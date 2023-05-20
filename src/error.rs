@@ -40,13 +40,21 @@ impl std::error::Error for PrepareErr {}
 pub enum ExecErr {
     TableFull(String),
     DuplicateKey(String),
+    LeafNodeFull(String),
+    PagerFull(String),
+    PageNumOutBound(String),
+    IoError(String),
 }
 
 impl Display for ExecErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TableFull(s) => write!(f, "{s}"),
-            Self::DuplicateKey(s) => write!(f, "{s}"),
+            Self::TableFull(s)
+            | Self::DuplicateKey(s)
+            | Self::PagerFull(s)
+            | Self::LeafNodeFull(s)
+            | Self::PageNumOutBound(s)
+            | Self::IoError(s) => write!(f, "{s}"),
         }
     }
 }

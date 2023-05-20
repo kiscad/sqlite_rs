@@ -10,11 +10,11 @@ use std::num::IntErrorKind;
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use btree::Node;
 use cursor::Cursor;
 use error::{DbError, ExecErr, MetaCmdErr, PrepareErr};
 use row::Row;
 
-use crate::btree::Node;
 pub use table::Table;
 
 pub fn run_cmd(cmd_str: &str, table: &mut Table) -> Result<(), DbError> {
@@ -39,11 +39,12 @@ fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
         }
         ".btree" => {
             println!("Tree:");
-            let node = table.pager.get_page(table.root_page_num).unwrap();
-            match node.as_ref() {
-                Node::LeafNode(node) => println!("{}", node),
-                _ => unreachable!(),
-            }
+            println!("{}", table.pager.stringfy_btree(table.root_page_num));
+            // let node = table.pager.get_node(table.root_page_num).unwrap();
+            // match node {
+            //     Node::LeafNode(node) => println!("{}", node),
+            //     _ => unreachable!(),
+            // }
         }
         _ => {
             return Err(MetaCmdErr::Unrecognized(format!(
@@ -108,7 +109,7 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
 
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     let key = row.id;
-    let mut cursor = Cursor::find(table, key);
+    let mut cursor = Cursor::find(table, key)?;
     row.insert_to(&mut cursor)
 }
 
@@ -116,9 +117,9 @@ fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
     let mut cursor = Cursor::new_at_table_start(table);
     while !cursor.end_of_table {
         let mut row = Row::default();
-        row.read_from(&mut cursor);
+        row.read_from(&mut cursor)?;
         println!("{row}");
-        cursor.advance();
+        cursor.advance()?;
     }
     Ok(())
 }
@@ -133,5 +134,5 @@ fn print_constants() {
         "LEAF_NODE_SPACE_FOR_CELLS: {}",
         pager::PAGE_SIZE - btree::LEAF_NODE_HEADER_SIZE
     );
-    println!("LEAF_NODE_MAX_CELLS:       {}", table::PAGE_MAX_ROWS);
+    println!("LEAF_NODE_MAX_CELLS:       {}", btree::LEAF_MAX_CELLS);
 }
