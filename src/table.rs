@@ -32,16 +32,20 @@ impl Table {
         }
     }
 
-    pub fn find_cell(&mut self, key: u32) -> Result<(usize, usize), ExecErr> {
-        let root_node = self.pager.get_node(self.root_page_num).unwrap();
-        if root_node.is_leaf() {
-            let Node::LeafNode(ref nd) = *root_node else { unreachable!()};
-            Ok((self.root_page_num, nd.find_place_for_new_cell(key as usize)))
-        } else {
-            let Node::InternalNode(ref nd) = *root_node else { unreachable!() };
-            let (page, leaf) = self.search_leaf_node(key, nd)?;
-            Ok((page as usize, leaf.find_place_for_new_cell(key as usize)))
-        }
+    pub fn find_cell(&mut self, key: u32) -> (usize, usize) {
+        let page = self.pager.find_leaf_node(self.root_page_num, key);
+        let Node::LeafNode(nd) = self.pager.get_node(page).unwrap() else { unreachable!() };
+        (page, nd.find_place_for_new_cell(key as usize))
+
+        // let root_node = self.pager.get_node(self.root_page_num).unwrap();
+        // if root_node.is_leaf() {
+        //     let Node::LeafNode(ref nd) = *root_node else { unreachable!()};
+        //     Ok((self.root_page_num, nd.find_place_for_new_cell(key as usize)))
+        // } else {
+        //     let Node::InternalNode(ref nd) = *root_node else { unreachable!() };
+        //     let (page, leaf) = self.search_leaf_node(key, nd)?;
+        //     Ok((page as usize, leaf.find_place_for_new_cell(key as usize)))
+        // }
         // match &root_node {
         //     Node::LeafNode(nd) => {
         //         Ok((self.root_page_num, nd.find_place_for_new_cell(key as usize)))
@@ -54,23 +58,23 @@ impl Table {
         // }
     }
 
-    fn search_leaf_node<'a>(
-        pager: &'a Pager,
-        cell_key: u32,
-        node: &'a InternalNode,
-    ) -> Result<(u32, &'a LeafNode), ExecErr> {
-        let mut page_tag: Option<u32> = None;
-        for PageKey { page, key } in &node.children {
-            if cell_key <= *key {
-                page_tag = Some(*page);
-                break;
-            }
-        }
-        let page = page_tag.unwrap_or(node.right_child_page);
-        let nd = pager.get_node(page as usize)?;
-        match &nd {
-            Node::LeafNode(n) => Ok((page, n)),
-            Node::InternalNode(n) => Self::search_leaf_node(pager, cell_key, n),
-        }
-    }
+    // fn search_leaf_node<'a>(
+    //     pager: &'a Pager,
+    //     cell_key: u32,
+    //     node: &'a InternalNode,
+    // ) -> Result<(u32, &'a LeafNode), ExecErr> {
+    //     let mut page_tag: Option<u32> = None;
+    //     for PageKey { page, key } in &node.children {
+    //         if cell_key <= *key {
+    //             page_tag = Some(*page);
+    //             break;
+    //         }
+    //     }
+    //     let page = page_tag.unwrap_or(node.right_child_page);
+    //     let nd = pager.get_node(page as usize)?;
+    //     match &nd {
+    //         Node::LeafNode(n) => Ok((page, n)),
+    //         Node::InternalNode(n) => Self::search_leaf_node(pager, cell_key, n),
+    //     }
+    // }
 }

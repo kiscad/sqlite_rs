@@ -109,7 +109,7 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
 
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     let key = row.id;
-    let mut cursor = Cursor::find(table, key)?;
+    let mut cursor = Cursor::find(table, key);
     row.insert_to(&mut cursor)
 }
 

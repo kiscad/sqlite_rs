@@ -26,14 +26,14 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn find(table: &'a mut Table, key: u32) -> Result<Self, ExecErr> {
-        let (page_idx, cell_idx) = table.find_cell(key)?;
-        Ok(Self {
+    pub fn find(table: &'a mut Table, key: u32) -> Self {
+        let (page_idx, cell_idx) = table.find_cell(key);
+        Self {
             table,
             page_idx,
             cell_idx,
             end_of_table: true,
-        })
+        }
     }
 
     pub fn read_row(&mut self, buf: &mut RowBytes) -> Result<(), ExecErr> {

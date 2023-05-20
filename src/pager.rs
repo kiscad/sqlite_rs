@@ -79,16 +79,22 @@ impl Pager {
         self.insert_node(node)
     }
 
-    // pub fn create_root_node(&mut self) -> Result<&mut Node, ExecErr> {
-    //     if self.num_pages >= TABLE_MAX_PAGES {
-    //         return Err(ExecErr::PagerFull("Error: Pager full.".to_string()));
-    //     }
-    //     Ok(Node::LeafNode(LeafNode::new(true)))
-    // }
-
-    pub fn find_node(&mut self, page_num: usize) -> Result<&Node, ExecErr> {
-        let nd = self.get_node(page_num)?;
-        Ok(nd)
+    pub fn find_leaf_node(&mut self, page: usize, cell_key: u32) -> usize {
+        let node = self.get_node(page).unwrap();
+        match node {
+            Node::LeafNode(_) => page,
+            Node::InternalNode(nd) => {
+                let mut page_tag: Option<u32> = None;
+                for PageKey { page, key } in &nd.children {
+                    if cell_key <= *key {
+                        page_tag = Some(*page);
+                        break;
+                    }
+                }
+                let page = page_tag.unwrap_or(nd.right_child_page);
+                self.find_leaf_node(page as usize, cell_key)
+            }
+        }
     }
 
     pub fn get_node(&mut self, page_num: usize) -> Result<&mut Node, ExecErr> {
@@ -161,9 +167,9 @@ impl Pager {
             let node = self.pages[*page as usize].as_ref().unwrap().as_ref();
             match node {
                 Node::LeafNode(nd) => {
-                    let s: String = format!("{}", nd)
+                    let s: String = format!("{}\n", nd)
                         .lines()
-                        .map(|s| format!("  {}", s))
+                        .map(|s| format!("  {}\n", s))
                         .collect();
                     res.push_str(&s);
                 }
@@ -171,7 +177,7 @@ impl Pager {
                     let s: String = self
                         .stringfy_internal_node(nd)
                         .lines()
-                        .map(|s| format!("  {}", s))
+                        .map(|s| format!("  {}\n", s))
                         .collect();
                     res.push_str(&s);
                 }
