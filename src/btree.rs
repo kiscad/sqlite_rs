@@ -1,5 +1,5 @@
 use crate::error::ExecErr;
-use crate::pager::Page;
+use crate::pager::{Page, PAGE_SIZE};
 use crate::row::{RowBytes, ROW_SIZE};
 use std::fmt::{write, Display, Formatter};
 use std::io::{self, BufRead, Read, Write};
@@ -75,10 +75,32 @@ impl InternalNode {
         }
     }
 
+    pub fn get_first_child(&self) -> u32 {
+        let PageKey { page, key } = &self.children[0];
+        *page
+    }
+
     fn new_from_page(page: &Page) -> Self {
         let mut node = Self::default();
         node.read_page(page);
         node
+    }
+
+    fn serialize(&self) -> Page {
+        let mut cache = [0u8; PAGE_SIZE];
+        let mut writer = io::Cursor::new(&mut cache[..]);
+        // write node-type: is-leaf
+        writer.write_all(&[u8::from(false)]).unwrap();
+        writer.write_all(&[u8::from(self.is_root)]).unwrap();
+        writer.write_all(&self.parent.to_be_bytes()).unwrap();
+        writer
+            .write_all(&self.right_child_page.to_be_bytes())
+            .unwrap();
+        for PageKey { page, .. } in &self.children {
+            writer.write_all(&page.to_be_bytes()).unwrap();
+            writer.write_all(&page.to_be_bytes()).unwrap();
+        }
+        cache
     }
 
     fn read_page(&mut self, page: &Page) {
@@ -109,15 +131,6 @@ impl InternalNode {
             ))
         }
     }
-
-    // fn search_node(&self, cell_key: usize) -> usize {
-    //     for PageKey { page, key } in &self.children {
-    //         if cell_key <= *key as usize {
-    //             return *page as usize;
-    //         }
-    //     }
-    //     self.right_child_page as usize
-    // }
 }
 
 // Each node corresponding to one page.
@@ -137,7 +150,7 @@ impl Cell {
 
 pub struct LeafNode {
     pub is_root: bool,
-    parent_pointer: u32,
+    pub parent: u32,
     // pub num_cells: u32, // to be remove
     pub cells: Vec<Cell>,
 }
@@ -161,6 +174,20 @@ impl Node {
         match self {
             Self::InternalNode(nd) => nd.is_root = is_root,
             Self::LeafNode(nd) => nd.is_root = is_root,
+        }
+    }
+
+    pub fn set_parent(&mut self, parent: usize) {
+        match self {
+            Self::LeafNode(nd) => nd.parent = parent as u32,
+            Self::InternalNode(nd) => nd.parent = parent as u32,
+        }
+    }
+
+    pub fn serialize(&self) -> Page {
+        match self {
+            Node::LeafNode(nd) => nd.serialize(),
+            Node::InternalNode(nd) => nd.serialize(),
         }
     }
 
@@ -189,7 +216,7 @@ impl LeafNode {
     pub fn new(is_root: bool) -> Self {
         Self {
             is_root,
-            parent_pointer: 0,
+            parent: 0,
             cells: Vec::with_capacity(LEAF_MAX_CELLS + 1),
         }
     }
@@ -210,7 +237,7 @@ impl LeafNode {
 
         let mut parent_pointer = [0; 4];
         reader.read_exact(&mut parent_pointer).unwrap();
-        self.parent_pointer = u32::from_be_bytes(parent_pointer);
+        self.parent = u32::from_be_bytes(parent_pointer);
 
         let mut num_cells = [0; 4];
         reader.read_exact(&mut num_cells).unwrap();
@@ -226,19 +253,20 @@ impl LeafNode {
         }
     }
 
-    pub fn write_page(&self, page: &mut Page) {
-        let mut writer = io::Cursor::new(&mut page[..]);
+    fn serialize(&self) -> Page {
+        let mut cache = [0u8; PAGE_SIZE];
+        let mut writer = io::Cursor::new(&mut cache[..]);
+        // write node-type: is_leaf
         writer.write_all(&[u8::from(true)]).unwrap();
         writer.write_all(&[u8::from(self.is_root)]).unwrap();
-        writer
-            .write_all(&self.parent_pointer.to_be_bytes())
-            .unwrap();
+        writer.write_all(&self.parent.to_be_bytes()).unwrap();
         let num_cells = self.cells.len() as u32;
         writer.write_all(&num_cells.to_be_bytes()).unwrap();
         for Cell { key, row } in &self.cells {
             writer.write_all(&key.to_be_bytes()).unwrap();
             writer.write_all(row).unwrap();
         }
+        cache
     }
 
     pub fn update_cell(&mut self, cell_idx: usize, cell_val: &RowBytes) {
@@ -275,7 +303,7 @@ impl LeafNode {
         let cells: Vec<_> = self.cells.drain(LEAF_SPLIT_IDX..).collect();
         Self {
             is_root: false,
-            parent_pointer: 0,
+            parent: 0,
             cells,
         }
     }

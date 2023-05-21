@@ -1,6 +1,7 @@
-use crate::btree::{InternalNode, LeafNode, Node, PageKey};
+use crate::btree::Node;
 use crate::error::ExecErr;
 use crate::table::TABLE_MAX_PAGES;
+use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -8,181 +9,129 @@ use std::path::Path;
 pub const PAGE_SIZE: usize = 4096;
 pub type Page = [u8; PAGE_SIZE];
 
+/// Pager 是磁盘上的数据库文件，在内存上的缓存
 pub struct Pager {
-    file: File,
+    file: RefCell<File>,
     pub file_len: usize,
     pub num_pages: usize,
     pub pages: [Option<Box<Node>>; TABLE_MAX_PAGES],
 }
 
 impl Pager {
-    pub fn open_pager(filename: impl AsRef<Path>) -> Result<Self, String> {
+    // pub fn get_start_leaf_node(&mut self, root_idx: usize) -> &Node {
+    //     let mut node = self.get_node(root_idx).unwrap();
+    //     while let Node::InternalNode(nd) = node {
+    //         let page_idx = nd.get_first_child();
+    //         self.get_node(page_idx as usize).unwrap();
+    //     }
+    //     node
+    // }
+
+    /// create a Pager by opening a Database file.
+    pub fn open_pager(filename: impl AsRef<Path>) -> Result<Self, ExecErr> {
         let file = OpenOptions::new()
             .write(true)
             .read(true)
             .create(true)
             .open(filename)
-            .map_err(|_| {
-                println!("Unable to open file.");
-                "ExitFailure".to_string()
-            })?;
+            .map_err(|_| ExecErr::IoError("Unable to open file.".to_string()))?;
         let file_len = file.metadata().unwrap().len() as usize;
 
         let num_pages = file_len / PAGE_SIZE;
         if file_len % PAGE_SIZE != 0 {
-            println!("Db file is not a whole number of pages. Corrupt file.");
-            return Err("ExitFailure".to_string());
+            return Err(ExecErr::IoError(
+                "Db file is not a whole number of pages. Corrupt file.".to_string(),
+            ));
         }
 
         const INIT: Option<Box<Node>> = None;
         let pages = [INIT; TABLE_MAX_PAGES];
         Ok(Self {
-            file,
+            file: RefCell::new(file),
             file_len,
             num_pages,
             pages,
         })
     }
 
-    pub fn split_root_node(&mut self, root_idx: usize, right: Node) -> Result<(), ExecErr> {
-        let old_root = self.pages[root_idx].as_mut().unwrap().as_mut();
-        match &old_root {
-            Node::InternalNode(nd) => todo!(),
-            Node::LeafNode(_) => {
-                let mut new_root = Node::InternalNode(InternalNode::new(
-                    self.num_pages as u32,
-                    old_root.get_max_key(),
-                    self.num_pages as u32 + 1,
-                ));
-                old_root.set_root(false);
-                new_root.set_root(true);
-
-                self.insert_node(new_root)?;
-                self.pages.swap(root_idx, self.num_pages - 1);
-                self.insert_node(right)?;
-                Ok(())
-            }
-        }
-    }
-
-    fn insert_node(&mut self, node: Node) -> Result<&mut Node, ExecErr> {
+    /// Insert a new page-node and return the pager-idx.
+    pub fn insert_node(&mut self, node: Node) -> Result<usize, ExecErr> {
         if self.num_pages >= TABLE_MAX_PAGES {
             return Err(ExecErr::PagerFull("Error: Pager full.".to_string()));
         }
         self.pages[self.num_pages] = Some(Box::new(node));
         self.num_pages += 1;
-        Ok(self.pages[self.num_pages - 1].as_mut().unwrap())
+        Ok(self.num_pages - 1)
     }
 
-    pub fn create_leaf_node(&mut self) -> Result<&mut Node, ExecErr> {
-        let node = Node::LeafNode(LeafNode::new(false));
-        self.insert_node(node)
+    // pub fn create_leaf_node(&mut self) -> Result<&mut Node, ExecErr> {
+    //     let node = Node::LeafNode(LeafNode::new(false));
+    //     self.insert_node(node)
+    // }
+
+    pub fn get_node(&self, page_idx: usize) -> Result<Option<&Node>, ExecErr> {
+        self.validate_page_idx(page_idx)?;
+        Ok(self.pages[page_idx].as_ref().map(|x| x.as_ref()))
     }
 
-    pub fn find_leaf_node(&mut self, page: usize, cell_key: u32) -> usize {
-        let node = self.get_node(page).unwrap();
-        match node {
-            Node::LeafNode(_) => page,
-            Node::InternalNode(nd) => {
-                let mut page_tag: Option<u32> = None;
-                for PageKey { page, key } in &nd.children {
-                    if cell_key <= *key {
-                        page_tag = Some(*page);
-                        break;
-                    }
-                }
-                let page = page_tag.unwrap_or(nd.right_child_page);
-                self.find_leaf_node(page as usize, cell_key)
-            }
-        }
+    pub fn get_node_mut(&mut self, page_idx: usize) -> Result<Option<&mut Node>, ExecErr> {
+        self.validate_page_idx(page_idx)?;
+        Ok(self.pages[page_idx].as_mut().map(|x| x.as_mut()))
     }
 
-    pub fn get_node(&mut self, page_num: usize) -> Result<&mut Node, ExecErr> {
-        // if table is empty
-        if self.num_pages == 0 {
-            let node = Node::LeafNode(LeafNode::new(true));
-            return self.insert_node(node);
-        }
-
-        if page_num >= self.num_pages {
-            return Err(ExecErr::PageNumOutBound(
+    fn validate_page_idx(&self, page_idx: usize) -> Result<(), ExecErr> {
+        if page_idx >= self.num_pages {
+            Err(ExecErr::PageNumOutBound(
                 "Error: PageNum overflow.".to_string(),
-            ));
+            ))
+        } else {
+            Ok(())
         }
-
-        let node_box = &mut self.pages[page_num];
-        // if the requested Page is not buffered, we need retrieve from file.
-        if node_box.is_none() {
-            let mut buffer = [0; PAGE_SIZE];
-
-            self.file
-                .seek(SeekFrom::Start((page_num * PAGE_SIZE) as u64))
-                .map_err(|_| ExecErr::IoError("Error: Fail seeking.".to_string()))?;
-            self.file
-                .read(&mut buffer)
-                .map_err(|_| ExecErr::IoError("Error: Fail reading.".to_string()))?;
-
-            let node = Node::new_from_page(&buffer);
-            let _ = node_box.insert(Box::new(node));
-            // let leaf = LeafNode::new_from_page(&buffer);
-            // let _ = node_box.insert(Box::new(Node::LeafNode(leaf)));
-        }
-
-        Ok(node_box.as_mut().unwrap())
     }
 
-    pub fn flush_pager(&mut self, page_num: usize) -> Result<(), ExecErr> {
-        if self.pages[page_num].is_none() {
-            eprintln!("Tried to flush null page.");
-            return Ok(());
-        }
+    /// load page-node from disk-file to memory
+    pub fn load_node(&mut self, page_idx: usize) -> Result<(), ExecErr> {
+        self.validate_page_idx(page_idx)?;
+        assert!(self.pages[page_idx].is_none());
+
+        let mut cache = [0; PAGE_SIZE];
         self.file
-            .seek(SeekFrom::Start((page_num * PAGE_SIZE) as u64))
+            .borrow_mut()
+            .seek(SeekFrom::Start((page_idx * PAGE_SIZE) as u64))
             .map_err(|_| ExecErr::IoError("Error: Fail seeking.".to_string()))?;
-
-        let node = self.pages[page_num].as_ref().unwrap().as_ref();
-        let mut buf = [0; PAGE_SIZE];
-        match node {
-            Node::LeafNode(nd) => nd.write_page(&mut buf),
-            _ => unreachable!(),
-        };
-
         self.file
-            .write(&buf)
-            .map_err(|_| ExecErr::IoError("Error: Fail writing.".to_string()))?;
+            .borrow_mut()
+            .read(&mut cache)
+            .map_err(|_| ExecErr::IoError("Error: Fail reading.".to_string()))?;
+        let node = Node::new_from_page(&cache);
+        let _ = self.pages[page_idx].insert(Box::new(node));
+
         Ok(())
     }
 
-    pub fn stringfy_btree(&self, root: usize) -> String {
-        match self.pages[root].as_ref().unwrap().as_ref() {
-            Node::LeafNode(nd) => format!("{}", nd),
-            Node::InternalNode(nd) => self.stringfy_internal_node(nd),
+    /// write page-node from memory to disk-file
+    pub fn flush_pager(&self, page_num: usize) -> Result<(), ExecErr> {
+        if self.pages[page_num].is_none() {
+            return Ok(());
         }
-    }
-
-    fn stringfy_internal_node(&self, node: &InternalNode) -> String {
-        let mut res = String::new();
-        res.push_str(&format!("{}", node));
-        for PageKey { page, .. } in &node.children {
-            let node = self.pages[*page as usize].as_ref().unwrap().as_ref();
-            match node {
-                Node::LeafNode(nd) => {
-                    let s: String = format!("{}\n", nd)
-                        .lines()
-                        .map(|s| format!("  {}\n", s))
-                        .collect();
-                    res.push_str(&s);
-                }
-                Node::InternalNode(nd) => {
-                    let s: String = self
-                        .stringfy_internal_node(nd)
-                        .lines()
-                        .map(|s| format!("  {}\n", s))
-                        .collect();
-                    res.push_str(&s);
-                }
+        let node = self.pages[page_num].as_ref().unwrap().as_ref();
+        // if table is empty
+        if node.is_root() && node.is_leaf() {
+            let Node::LeafNode(nd) = node else { unreachable!() };
+            if nd.cells.is_empty() {
+                return Ok(());
             }
         }
-        res
+        let cache = node.serialize();
+
+        self.file
+            .borrow_mut()
+            .seek(SeekFrom::Start((page_num * PAGE_SIZE) as u64))
+            .map_err(|_| ExecErr::IoError("Error: Fail seeking.".to_string()))?;
+
+        self.file
+            .borrow_mut()
+            .write_all(&cache)
+            .map_err(|_| ExecErr::IoError("Error: Fail writing.".to_string()))
     }
 }

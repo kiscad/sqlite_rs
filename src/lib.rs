@@ -39,7 +39,7 @@ fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
         }
         ".btree" => {
             println!("Tree:");
-            println!("{}", table.pager.stringfy_btree(table.root_page_num));
+            println!("{}", table.btree_to_string(table.root_idx));
             // let node = table.pager.get_node(table.root_page_num).unwrap();
             // match node {
             //     Node::LeafNode(node) => println!("{}", node),
@@ -110,7 +110,11 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     let key = row.id;
     let mut cursor = Cursor::find(table, key);
-    row.insert_to(&mut cursor)
+    row.insert_to(&mut cursor)?;
+    // println!("{}", table.pager.stringfy(table.root_page_num));
+    let page_num = table.pager.pages.iter().filter(|x| x.is_some()).count();
+    println!("Page number: {page_num}");
+    Ok(())
 }
 
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
