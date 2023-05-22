@@ -1,7 +1,6 @@
 use crate::btree::Node;
 use crate::error::ExecErr;
 use crate::table::TABLE_MAX_PAGES;
-use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -11,24 +10,15 @@ pub type Page = [u8; PAGE_SIZE];
 
 /// Pager 是磁盘上的数据库文件，在内存上的缓存
 pub struct Pager {
-    file: RefCell<File>,
-    pub file_len: usize,
+    file: File,
+    // file_len: usize,
     pub num_pages: usize,
-    pub pages: [Option<Box<Node>>; TABLE_MAX_PAGES],
+    pages: [Option<Box<Node>>; TABLE_MAX_PAGES],
 }
 
 impl Pager {
-    // pub fn get_start_leaf_node(&mut self, root_idx: usize) -> &Node {
-    //     let mut node = self.get_node(root_idx).unwrap();
-    //     while let Node::InternalNode(nd) = node {
-    //         let page_idx = nd.get_first_child();
-    //         self.get_node(page_idx as usize).unwrap();
-    //     }
-    //     node
-    // }
-
     /// create a Pager by opening a Database file.
-    pub fn open_pager(filename: impl AsRef<Path>) -> Result<Self, ExecErr> {
+    pub fn open_database(filename: impl AsRef<Path>) -> Result<Self, ExecErr> {
         let file = OpenOptions::new()
             .write(true)
             .read(true)
@@ -47,8 +37,8 @@ impl Pager {
         const INIT: Option<Box<Node>> = None;
         let pages = [INIT; TABLE_MAX_PAGES];
         Ok(Self {
-            file: RefCell::new(file),
-            file_len,
+            file,
+            // file_len,
             num_pages,
             pages,
         })
@@ -64,19 +54,24 @@ impl Pager {
         Ok(self.num_pages - 1)
     }
 
-    // pub fn create_leaf_node(&mut self) -> Result<&mut Node, ExecErr> {
-    //     let node = Node::LeafNode(LeafNode::new(false));
-    //     self.insert_node(node)
-    // }
-
-    pub fn get_node(&self, page_idx: usize) -> Result<Option<&Node>, ExecErr> {
+    pub fn get_node(&mut self, page_idx: usize) -> Result<&Node, ExecErr> {
         self.validate_page_idx(page_idx)?;
-        Ok(self.pages[page_idx].as_ref().map(|x| x.as_ref()))
+        self.try_load_page(page_idx)?;
+        Ok(self.pages[page_idx].as_ref().unwrap().as_ref())
     }
 
-    pub fn get_node_mut(&mut self, page_idx: usize) -> Result<Option<&mut Node>, ExecErr> {
+    pub fn get_node_mut(&mut self, page_idx: usize) -> Result<&mut Node, ExecErr> {
         self.validate_page_idx(page_idx)?;
-        Ok(self.pages[page_idx].as_mut().map(|x| x.as_mut()))
+        self.try_load_page(page_idx)?;
+        Ok(self.pages[page_idx].as_mut().unwrap().as_mut())
+    }
+
+    pub fn swap_pages(&mut self, index1: usize, index2: usize) -> Result<(), ExecErr> {
+        self.validate_page_idx(index1)?;
+        self.validate_page_idx(index2)?;
+        assert_ne!(index1, index2);
+        self.pages.swap(index1, index2);
+        Ok(())
     }
 
     fn validate_page_idx(&self, page_idx: usize) -> Result<(), ExecErr> {
@@ -89,18 +84,23 @@ impl Pager {
         }
     }
 
+    fn try_load_page(&mut self, page_idx: usize) -> Result<(), ExecErr> {
+        if self.pages[page_idx].is_none() {
+            self.load_page(page_idx)?;
+        }
+        Ok(())
+    }
+
     /// load page-node from disk-file to memory
-    pub fn load_node(&mut self, page_idx: usize) -> Result<(), ExecErr> {
+    fn load_page(&mut self, page_idx: usize) -> Result<(), ExecErr> {
         self.validate_page_idx(page_idx)?;
         assert!(self.pages[page_idx].is_none());
 
         let mut cache = [0; PAGE_SIZE];
         self.file
-            .borrow_mut()
             .seek(SeekFrom::Start((page_idx * PAGE_SIZE) as u64))
             .map_err(|_| ExecErr::IoError("Error: Fail seeking.".to_string()))?;
         self.file
-            .borrow_mut()
             .read(&mut cache)
             .map_err(|_| ExecErr::IoError("Error: Fail reading.".to_string()))?;
         let node = Node::new_from_page(&cache);
@@ -110,7 +110,7 @@ impl Pager {
     }
 
     /// write page-node from memory to disk-file
-    pub fn flush_pager(&self, page_num: usize) -> Result<(), ExecErr> {
+    pub fn flush_pager(&mut self, page_num: usize) -> Result<(), ExecErr> {
         if self.pages[page_num].is_none() {
             return Ok(());
         }
@@ -125,12 +125,10 @@ impl Pager {
         let cache = node.serialize();
 
         self.file
-            .borrow_mut()
             .seek(SeekFrom::Start((page_num * PAGE_SIZE) as u64))
             .map_err(|_| ExecErr::IoError("Error: Fail seeking.".to_string()))?;
 
         self.file
-            .borrow_mut()
             .write_all(&cache)
             .map_err(|_| ExecErr::IoError("Error: Fail writing.".to_string()))
     }

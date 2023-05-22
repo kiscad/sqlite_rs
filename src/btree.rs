@@ -1,7 +1,7 @@
 use crate::error::ExecErr;
 use crate::pager::{Page, PAGE_SIZE};
 use crate::row::{RowBytes, ROW_SIZE};
-use std::fmt::{write, Display, Formatter};
+use std::fmt::{Display, Formatter};
 use std::io::{self, BufRead, Read, Write};
 
 /*
@@ -76,7 +76,7 @@ impl InternalNode {
     }
 
     pub fn get_first_child(&self) -> u32 {
-        let PageKey { page, key } = &self.children[0];
+        let PageKey { page, .. } = &self.children[0];
         *page
     }
 
@@ -136,7 +136,7 @@ impl InternalNode {
 // Each node corresponding to one page.
 // Nodes need to store some metadata at the beginning of the page.
 // Metadata: node type, is-root-node, pointer-to-parent.
-
+#[derive(Debug)]
 pub struct Cell {
     pub key: u32,
     pub row: RowBytes,
@@ -295,10 +295,10 @@ impl LeafNode {
         Ok(())
     }
 
-    pub fn insert_and_split(&mut self, idx: usize, key: u32, val: &RowBytes) -> Self {
+    pub fn insert_and_split(&mut self, cell_idx: usize, key: u32, val: &RowBytes) -> Self {
         assert_eq!(self.cells.len(), LEAF_MAX_CELLS);
-        assert!(idx <= self.cells.len());
-        self.cells.insert(idx, Cell::new(key, *val));
+        assert!(cell_idx <= self.cells.len());
+        self.cells.insert(cell_idx, Cell::new(key, *val));
 
         let cells: Vec<_> = self.cells.drain(LEAF_SPLIT_IDX..).collect();
         Self {
@@ -347,5 +347,14 @@ impl Display for LeafNode {
 impl Display for InternalNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "internal (size {})", self.children.len())
+    }
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InternalNode(nd) => write!(f, "{}", nd),
+            Self::LeafNode(nd) => write!(f, "{}", nd),
+        }
     }
 }

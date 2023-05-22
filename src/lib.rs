@@ -10,7 +10,6 @@ use std::num::IntErrorKind;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use btree::Node;
 use cursor::Cursor;
 use error::{DbError, ExecErr, MetaCmdErr, PrepareErr};
 use row::Row;
@@ -40,11 +39,6 @@ fn do_meta_command(cmd_str: &str, table: &mut Table) -> Result<(), MetaCmdErr> {
         ".btree" => {
             println!("Tree:");
             println!("{}", table.btree_to_string(table.root_idx));
-            // let node = table.pager.get_node(table.root_page_num).unwrap();
-            // match node {
-            //     Node::LeafNode(node) => println!("{}", node),
-            //     _ => unreachable!(),
-            // }
         }
         _ => {
             return Err(MetaCmdErr::Unrecognized(format!(
@@ -109,11 +103,9 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
 
 fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     let key = row.id;
-    let mut cursor = Cursor::find(table, key);
+    let mut cursor = Cursor::new_by_key(table, key);
     row.insert_to(&mut cursor)?;
-    // println!("{}", table.pager.stringfy(table.root_page_num));
-    let page_num = table.pager.pages.iter().filter(|x| x.is_some()).count();
-    println!("Page number: {page_num}");
+    println!("{}", table.btree_to_string(table.root_idx));
     Ok(())
 }
 
