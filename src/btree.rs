@@ -93,12 +93,14 @@ impl InternalNode {
         writer.write_all(&[u8::from(false)]).unwrap();
         writer.write_all(&[u8::from(self.is_root)]).unwrap();
         writer.write_all(&self.parent.to_be_bytes()).unwrap();
+        let num_keys = self.children.len() as u32;
+        writer.write_all(&num_keys.to_be_bytes()).unwrap();
         writer
             .write_all(&self.right_child_page.to_be_bytes())
             .unwrap();
-        for PageKey { page, .. } in &self.children {
+        for PageKey { page, key } in &self.children {
             writer.write_all(&page.to_be_bytes()).unwrap();
-            writer.write_all(&page.to_be_bytes()).unwrap();
+            writer.write_all(&key.to_be_bytes()).unwrap();
         }
         cache
     }

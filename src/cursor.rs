@@ -52,6 +52,7 @@ impl<'a> Cursor<'a> {
         });
         match res {
             Ok(()) => Ok(()),
+            Err(ExecErr::DuplicateKey(s)) => Err(ExecErr::DuplicateKey(s)),
             Err(ExecErr::LeafNodeFull(_)) => self
                 .table
                 .split_leaf_and_insert_row(node_idx, cell_idx, key, row),
