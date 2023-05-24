@@ -25,7 +25,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn new_by_key(table: &'a Table, key: u32) -> Self {
-        let (page_idx, cell_idx) = table.find_page_and_cell_by_key(key);
+        let (page_idx, cell_idx) = table.find_page_and_cell_by_key(key).unwrap();
         Self {
             table,
             node_idx: page_idx,
@@ -35,7 +35,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn read_row(&mut self, buf: &mut RowBytes) -> Result<(), ExecErr> {
-        self.table.get_leaf_node(self.node_idx, |nd| {
+        self.table.get_leaf_node_mut(self.node_idx, |nd| {
             nd.read_cell(self.cell_idx, buf);
             Ok(())
         })

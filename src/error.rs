@@ -44,6 +44,7 @@ pub enum ExecErr {
     PagerFull(String),
     PageNumOutBound(String),
     IoError(String),
+    NodeError(String),
 }
 
 impl Display for ExecErr {
@@ -54,7 +55,8 @@ impl Display for ExecErr {
             | Self::PagerFull(s)
             | Self::LeafNodeFull(s)
             | Self::PageNumOutBound(s)
-            | Self::IoError(s) => write!(f, "{s}"),
+            | Self::IoError(s)
+            | Self::NodeError(s) => write!(f, "{s}"),
         }
     }
 }

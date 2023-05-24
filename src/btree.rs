@@ -59,7 +59,6 @@ impl PageKey {
 pub struct InternalNode {
     is_root: bool,
     parent: u32,
-    // pub num_keys: u32,
     pub children: Vec<PageKey>,
     pub right_child_page: u32,
 }
@@ -73,6 +72,15 @@ impl InternalNode {
             children: vec![page_key],
             right_child_page: right_page,
         }
+    }
+
+    pub fn get_child_by(&self, cell_key: u32) -> u32 {
+        for PageKey { page, key } in &self.children {
+            if cell_key <= *key {
+                return *page;
+            }
+        }
+        self.right_child_page
     }
 
     pub fn get_first_child(&self) -> u32 {
@@ -210,6 +218,35 @@ impl Node {
         match self {
             Self::InternalNode(nd) => nd.children[nd.children.len() - 1].key,
             Self::LeafNode(nd) => nd.cells[nd.cells.len() - 1].key,
+        }
+    }
+
+    pub fn try_into_leaf(&self) -> Result<&LeafNode, ExecErr> {
+        match self {
+            Self::LeafNode(nd) => Ok(nd),
+            Self::InternalNode(_) => Err(ExecErr::NodeError(
+                "Error: It's a Internal node.".to_string(),
+            )),
+        }
+    }
+
+    pub fn try_into_leaf_mut(&mut self) -> Result<&mut LeafNode, ExecErr> {
+        match self {
+            Self::LeafNode(nd) => Ok(nd),
+            Self::InternalNode(_) => Err(ExecErr::NodeError(
+                "Error: It's a Internal node.".to_string(),
+            )),
+        }
+    }
+
+    pub fn get_children(&self) -> Vec<u32> {
+        match self {
+            Self::LeafNode(_) => vec![],
+            Self::InternalNode(nd) => {
+                let mut pages: Vec<u32> = nd.children.iter().map(|x| x.page).collect();
+                pages.push(nd.right_child_page);
+                pages
+            }
         }
     }
 }

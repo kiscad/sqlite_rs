@@ -1,4 +1,4 @@
-use crate::btree::{InternalNode, LeafNode, Node, PageKey};
+use crate::btree::{InternalNode, LeafNode, Node};
 use crate::error::ExecErr;
 use crate::pager::Pager;
 use crate::row::RowBytes;
@@ -46,11 +46,13 @@ impl Table {
         key: u32,
         row: &RowBytes,
     ) -> Result<(), ExecErr> {
-        let new_node = {
-            let mut _pager = self.pager.borrow_mut();
-            let Node::LeafNode(old_node) = _pager.get_node_mut(node_idx).unwrap() else { unreachable!() };
-            old_node.insert_and_split(cell_idx, key, row)
-        };
+        let new_node = self
+            .pager
+            .borrow_mut()
+            .get_node_mut(node_idx)?
+            .try_into_leaf_mut()?
+            .insert_and_split(cell_idx, key, row);
+
         self.split_and_insert_node(node_idx, Node::LeafNode(new_node))
     }
 
@@ -67,23 +69,18 @@ impl Table {
     pub fn split_root_and_insert_node(&self, mut right: Node) -> Result<(), ExecErr> {
         let page_idx = self.pager.borrow().num_pages as u32;
 
-        let new_root = {
-            let mut binding = self.pager.borrow_mut();
-            let old_root = binding.get_node_mut(self.root_idx).unwrap();
-
-            match old_root {
-                Node::InternalNode(_) => todo!(),
-                Node::LeafNode(_) => {
-                    let mut new_root = Node::InternalNode(InternalNode::new(
-                        page_idx,
-                        old_root.get_max_key(),
-                        page_idx + 1,
-                    ));
-                    old_root.set_root(false);
-                    old_root.set_parent(self.root_idx);
-                    new_root.set_root(true);
-                    new_root
-                }
+        let new_root = match self.pager.borrow_mut().get_node_mut(self.root_idx)? {
+            Node::InternalNode(_) => todo!(),
+            leaf_root => {
+                let mut root = Node::InternalNode(InternalNode::new(
+                    page_idx,
+                    leaf_root.get_max_key(),
+                    page_idx + 1,
+                ));
+                leaf_root.set_root(false);
+                leaf_root.set_parent(self.root_idx);
+                root.set_root(true);
+                root
             }
         };
         let index = self.pager.borrow_mut().insert_node(new_root)?;
@@ -93,76 +90,62 @@ impl Table {
         Ok(())
     }
 
-    pub fn find_page_and_cell_by_key(&self, key: u32) -> (usize, usize) {
+    pub fn find_page_and_cell_by_key(&self, key: u32) -> Result<(usize, usize), ExecErr> {
         let leaf_idx = self.locate_leaf_node(self.root_idx, key);
-        let mut _binding = self.pager.borrow_mut();
-        let Node::LeafNode(node) = _binding.get_node(leaf_idx).unwrap() else { unreachable!() };
-        (leaf_idx, node.find_place_for_new_cell(key as usize))
+        let cell_idx = self
+            .pager
+            .borrow_mut()
+            .get_node(leaf_idx)?
+            .try_into_leaf()?
+            .find_place_for_new_cell(key as usize);
+        Ok((leaf_idx, cell_idx))
     }
 
     fn locate_leaf_node(&self, node_idx: usize, cell_key: u32) -> usize {
-        let mut child_page_idx = None;
-        {
-            let mut _pager = self.pager.borrow_mut();
-            let node = _pager.get_node(node_idx).unwrap();
-            match node {
-                Node::LeafNode(_) => return node_idx,
-                Node::InternalNode(nd) => {
-                    for PageKey { page, key } in &nd.children {
-                        if cell_key <= *key {
-                            child_page_idx = Some(*page);
-                        }
-                    }
-                    if child_page_idx.is_none() {
-                        child_page_idx = Some(nd.right_child_page);
-                    }
-                }
-            }
-        }
-        if let Some(page_idx) = child_page_idx {
-            self.locate_leaf_node(page_idx as usize, cell_key)
-        } else {
-            unreachable!()
-        }
+        let page_idx = match self.pager.borrow_mut().get_node(node_idx).unwrap() {
+            Node::LeafNode(_) => return node_idx,
+            Node::InternalNode(nd) => nd.get_child_by(cell_key),
+        };
+
+        self.locate_leaf_node(page_idx as usize, cell_key)
     }
 
     pub fn get_leaf_node_mut<F>(&self, node_idx: usize, mut f: F) -> Result<(), ExecErr>
     where
         F: FnMut(&mut LeafNode) -> Result<(), ExecErr>,
     {
-        match self.pager.borrow_mut().get_node_mut(node_idx).unwrap() {
-            Node::LeafNode(nd) => f(nd),
-            Node::InternalNode(_) => panic!(),
-        }
+        f(self
+            .pager
+            .borrow_mut()
+            .get_node_mut(node_idx)?
+            .try_into_leaf_mut()?)
     }
 
     pub fn get_leaf_node<F>(&self, node_idx: usize, mut f: F) -> Result<(), ExecErr>
     where
         F: FnMut(&LeafNode) -> Result<(), ExecErr>,
     {
-        match self.pager.borrow_mut().get_node(node_idx).unwrap() {
-            Node::LeafNode(nd) => f(nd),
-            Node::InternalNode(_) => panic!(),
-        }
+        f(self
+            .pager
+            .borrow_mut()
+            .get_node(node_idx)?
+            .try_into_leaf()?)
     }
 
     pub fn btree_to_string(&self, page_idx: usize) -> String {
         let mut res = String::new();
 
-        let children_pages: Vec<u32> = {
-            let mut _binding = self.pager.borrow_mut();
-            let node = _binding.get_node(page_idx).unwrap();
-            res.push_str(&format!("{}", node));
+        res.push_str(&format!(
+            "{}",
+            self.pager.borrow_mut().get_node(page_idx).unwrap()
+        ));
 
-            match node {
-                Node::LeafNode(_) => vec![],
-                Node::InternalNode(nd) => {
-                    let mut pages: Vec<_> = nd.children.iter().map(|x| x.page).collect();
-                    pages.push(nd.right_child_page);
-                    pages
-                }
-            }
-        };
+        let children_pages = self
+            .pager
+            .borrow_mut()
+            .get_node(page_idx)
+            .unwrap()
+            .get_children();
 
         for page_idx in children_pages {
             let s: String = self
@@ -170,7 +153,6 @@ impl Table {
                 .lines()
                 .map(|s| format!("  {}\n", s))
                 .collect();
-            // println!("{}", s);
             res.push_str(&s);
         }
 
