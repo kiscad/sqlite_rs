@@ -29,7 +29,7 @@ impl Table {
         })
     }
 
-    pub fn close_db(&mut self) {
+    pub fn close_db(&self) {
         let num_pages = self.pager.borrow().num_pages;
         let mut _pager = self.pager.borrow_mut();
         for i in 0..num_pages {
@@ -40,7 +40,7 @@ impl Table {
     }
 
     pub fn split_leaf_and_insert_row(
-        &mut self,
+        &self,
         node_idx: usize,
         cell_idx: usize,
         key: u32,
@@ -54,11 +54,7 @@ impl Table {
         self.split_and_insert_node(node_idx, Node::LeafNode(new_node))
     }
 
-    pub fn split_and_insert_node(
-        &mut self,
-        node_idx: usize,
-        new_node: Node,
-    ) -> Result<(), ExecErr> {
+    pub fn split_and_insert_node(&self, node_idx: usize, new_node: Node) -> Result<(), ExecErr> {
         if node_idx == self.root_idx {
             // base case
             self.split_root_and_insert_node(new_node)
@@ -68,7 +64,7 @@ impl Table {
         }
     }
 
-    pub fn split_root_and_insert_node(&mut self, mut right: Node) -> Result<(), ExecErr> {
+    pub fn split_root_and_insert_node(&self, mut right: Node) -> Result<(), ExecErr> {
         let page_idx = self.pager.borrow().num_pages as u32;
 
         let new_root = {
@@ -130,7 +126,7 @@ impl Table {
         }
     }
 
-    pub fn get_leaf_node_mut<F>(&mut self, node_idx: usize, mut f: F) -> Result<(), ExecErr>
+    pub fn get_leaf_node_mut<F>(&self, node_idx: usize, mut f: F) -> Result<(), ExecErr>
     where
         F: FnMut(&mut LeafNode) -> Result<(), ExecErr>,
     {

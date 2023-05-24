@@ -3,14 +3,14 @@ use crate::row::RowBytes;
 use crate::Table;
 
 pub struct Cursor<'a> {
-    table: &'a mut Table,
+    table: &'a Table,
     pub node_idx: usize,
     pub cell_idx: usize,
     pub end_of_table: bool,
 }
 
 impl<'a> Cursor<'a> {
-    pub fn new_at_table_start(table: &'a mut Table) -> Self {
+    pub fn new_at_table_start(table: &'a Table) -> Self {
         // let page_idx = table.find_start_leaf_node(table.root_idx);
         // let Node::LeafNode(node) = table.get_node_mut(page_idx).unwrap() else { unreachable!() };
         // let end_of_table = node.cells.is_empty();
@@ -24,7 +24,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn new_by_key(table: &'a mut Table, key: u32) -> Self {
+    pub fn new_by_key(table: &'a Table, key: u32) -> Self {
         let (page_idx, cell_idx) = table.find_page_and_cell_by_key(key);
         Self {
             table,
