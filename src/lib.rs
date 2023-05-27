@@ -105,7 +105,6 @@ fn execute_insert(row: &Row, table: &Table) -> Result<(), ExecErr> {
     let key = row.id;
     let mut cursor = Cursor::new_by_key(table, key);
     row.insert_to(&mut cursor)?;
-    // println!("{}", table.btree_to_string(table.root_idx));
     Ok(())
 }
 

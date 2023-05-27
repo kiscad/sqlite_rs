@@ -75,12 +75,25 @@ impl InternalNode {
     }
 
     pub fn get_child_by(&self, cell_key: u32) -> u32 {
-        for PageKey { page, key } in &self.children {
-            if cell_key <= *key {
-                return *page;
+        // binary search
+        let mut lower = 0;
+        let mut upper = self.children.len();
+
+        while lower < upper {
+            let mid = (lower + upper) / 2;
+            let key = self.children[mid].key;
+            if cell_key <= key {
+                upper = mid;
+            } else {
+                lower = mid + 1;
             }
         }
-        self.right_child_page
+
+        if lower >= self.children.len() {
+            self.right_child_page
+        } else {
+            self.children[lower].page
+        }
     }
 
     pub fn get_first_child(&self) -> u32 {
@@ -376,8 +389,7 @@ impl Display for LeafNode {
         let cells_str: Vec<_> = self
             .cells
             .iter()
-            .enumerate()
-            .map(|(idx, Cell { key, .. })| format!("  - {} : {}", idx, key))
+            .map(|Cell { key, .. }| format!("  - {}", key))
             .collect();
         write!(f, "{}", cells_str.join("\n"))
     }
