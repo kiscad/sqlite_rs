@@ -237,12 +237,40 @@ fn allows_printing_out_the_structure_of_3_leaf_node_btree() {
     let assert = cmd.arg(filename).write_stdin(script).assert();
 
     let _ = std::fs::remove_file(filename);
-    let mut output: String = (0..20).map(|_| "db > Executed.\n").collect();
-    output.push_str("db > ");
+    let mut expect: String = (0..20).map(|_| "db > Executed.\n").collect();
+    expect.push_str("db > ");
     assert
         .failure()
-        .stdout(output)
+        .stdout(expect)
         .stderr(predicates::str::contains(
             "Need to implement updating parent after split.",
         ));
+}
+
+#[test]
+#[should_panic]
+fn prints_all_rows_in_a_multi_level_tree() {
+    let filename = "prints_all_rows_in_a_multi_level_tree.db";
+    let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
+    let mut script: String = (0..15)
+        .map(|i| format!("insert {i} user{i} person{i}@com\n"))
+        .collect();
+    script.push_str("select\n.exit");
+    let assert = cmd.arg(filename).write_stdin(script).assert();
+
+    let _ = std::fs::remove_file(filename);
+    let mut expect: String = (0..15).map(|_| "db > Executed.\n").collect();
+    expect.push_str("db > ");
+    let select_output: String = (0..15)
+        .map(|i| {
+            format!(
+                "(i, {:?}, {:?})\n",
+                format!("user{i}"),
+                format!("person{i}@com")
+            )
+        })
+        .collect();
+    expect.push_str(&select_output);
+    expect.push_str("Executed.\ndb > ");
+    assert.success().stdout(expect);
 }

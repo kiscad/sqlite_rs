@@ -121,13 +121,10 @@ fn execute_select(table: &Table) -> Result<(), ExecErr> {
 
 fn print_constants() {
     println!("ROW_SIZE:                  {}", row::ROW_SIZE);
-    println!(
-        "LEAF_NODE_HEADER_SIZE:     {}",
-        btree::LEAF_NODE_HEADER_SIZE
-    );
+    println!("LEAF_NODE_HEADER_SIZE:     {}", btree::LEAF_HEADER_SIZE);
     println!(
         "LEAF_NODE_SPACE_FOR_CELLS: {}",
-        pager::PAGE_SIZE - btree::LEAF_NODE_HEADER_SIZE
+        pager::PAGE_SIZE - btree::LEAF_HEADER_SIZE
     );
     println!("LEAF_NODE_MAX_CELLS:       {}", btree::LEAF_MAX_CELLS);
 }

@@ -117,7 +117,7 @@ impl Pager {
         let node = self.pages[page_num].as_ref().unwrap().as_ref();
         // if table is empty
         if node.is_root() && node.is_leaf() {
-            let Node::LeafNode(nd) = node else { unreachable!() };
+            let Node::Leaf(nd) = node else { unreachable!() };
             if nd.cells.is_empty() {
                 return Ok(());
             }

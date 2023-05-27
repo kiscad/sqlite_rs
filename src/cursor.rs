@@ -11,16 +11,11 @@ pub struct Cursor<'a> {
 
 impl<'a> Cursor<'a> {
     pub fn new_at_table_start(table: &'a Table) -> Self {
-        // let page_idx = table.find_start_leaf_node(table.root_idx);
-        // let Node::LeafNode(node) = table.get_node_mut(page_idx).unwrap() else { unreachable!() };
-        // let end_of_table = node.cells.is_empty();
-        let node_idx = 0;
-        let end_of_table = false;
         Self {
             table,
-            node_idx,
+            node_idx: table.find_start_leaf_node().unwrap(),
             cell_idx: 0,
-            end_of_table,
+            end_of_table: table.is_empty(),
         }
     }
 
