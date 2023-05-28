@@ -6,6 +6,7 @@ mod row;
 mod table;
 
 use std::num::IntErrorKind;
+use std::process;
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -29,8 +30,11 @@ pub fn run_cmd(cmd_str: &str, table: &Table) -> Result<(), DbError> {
 fn do_meta_command(cmd_str: &str, table: &Table) -> Result<(), MetaCmdErr> {
     match cmd_str {
         ".exit" => {
-            table.close_db();
-            std::process::exit(0);
+            table.close_db().unwrap_or_else(|e| {
+                eprintln!("{e:?}");
+                process::exit(1);
+            });
+            process::exit(0);
         }
         ".constants" => {
             println!("Constants:");
@@ -38,7 +42,7 @@ fn do_meta_command(cmd_str: &str, table: &Table) -> Result<(), MetaCmdErr> {
         }
         ".btree" => {
             println!("Tree:");
-            println!("{}", table.btree_to_string(table.root_idx));
+            println!("{}", table.btree_to_str());
         }
         _ => {
             return Err(MetaCmdErr::Unrecognized(format!(
@@ -103,7 +107,7 @@ fn execute_statement(stmt: &Statement, table: &Table) -> Result<(), ExecErr> {
 
 fn execute_insert(row: &Row, table: &Table) -> Result<(), ExecErr> {
     let key = row.id;
-    let mut cursor = Cursor::new_by_key(table, key);
+    let mut cursor = Cursor::new_by_key(table, key as usize);
     row.insert_to(&mut cursor)?;
     Ok(())
 }
@@ -120,11 +124,12 @@ fn execute_select(table: &Table) -> Result<(), ExecErr> {
 }
 
 fn print_constants() {
+    use btree::leaf::{HEADER_SIZE, MAX_CELLS};
     println!("ROW_SIZE:                  {}", row::ROW_SIZE);
-    println!("LEAF_NODE_HEADER_SIZE:     {}", btree::LEAF_HEADER_SIZE);
+    println!("LEAF_NODE_HEADER_SIZE:     {}", HEADER_SIZE);
     println!(
         "LEAF_NODE_SPACE_FOR_CELLS: {}",
-        pager::PAGE_SIZE - btree::LEAF_HEADER_SIZE
+        pager::PAGE_SIZE - HEADER_SIZE
     );
-    println!("LEAF_NODE_MAX_CELLS:       {}", btree::LEAF_MAX_CELLS);
+    println!("LEAF_NODE_MAX_CELLS:       {}", MAX_CELLS);
 }

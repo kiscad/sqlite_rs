@@ -1,3 +1,4 @@
+use crate::btree::node::{NodeWk2, Parent};
 use crate::error::ExecErr;
 use crate::pager::{Page, PAGE_SIZE};
 use crate::row::{RowBytes, ROW_SIZE};
@@ -8,11 +9,11 @@ const NODE_TYPE_SIZE: usize = mem::size_of::<u8>();
 const IS_ROOT_SIZE: usize = mem::size_of::<u8>();
 const PARENT_SIZE: usize = mem::size_of::<u32>();
 const NEXT_LEAF_SIZE: usize = mem::size_of::<u32>();
-pub const LEAF_HEADER_SIZE: usize = NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_SIZE + NEXT_LEAF_SIZE;
+pub const HEADER_SIZE: usize = NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_SIZE + NEXT_LEAF_SIZE;
 const CELL_KEY_SIZE: usize = mem::size_of::<u32>();
 const CELL_SIZE: usize = CELL_KEY_SIZE + ROW_SIZE;
-pub const LEAF_MAX_CELLS: usize = (PAGE_SIZE - LEAF_HEADER_SIZE) / CELL_SIZE;
-const SPLIT_IDX: usize = LEAF_MAX_CELLS / 2 + 1;
+pub const MAX_CELLS: usize = (PAGE_SIZE - HEADER_SIZE) / CELL_SIZE;
+const SPLIT_IDX: usize = MAX_CELLS / 2 + 1;
 
 #[derive(Debug)]
 pub struct Cell {
@@ -20,12 +21,28 @@ pub struct Cell {
     pub row: RowBytes,
 }
 
+#[derive(Default)]
 pub struct Leaf {
     pub is_root: bool,
-    pub parent: u32,
-    pub next_leaf: Option<u32>,
-    // pub num_cells: u32, // to be remove
+    pub page_idx: usize,
+    pub parent: Parent,
+    pub next_leaf: NextLeaf,
     pub cells: Vec<Cell>,
+}
+
+#[derive(Default, Clone)]
+pub struct NextLeaf {
+    pub page: u32,
+    pub node: NodeWk2,
+}
+
+impl NextLeaf {
+    fn new(page: u32) -> Self {
+        Self {
+            page,
+            node: NodeWk2::default(),
+        }
+    }
 }
 
 impl Cell {
@@ -35,17 +52,18 @@ impl Cell {
 }
 
 impl Leaf {
-    pub fn new(is_root: bool) -> Self {
+    pub fn new_root_leaf() -> Self {
         Self {
-            is_root,
-            parent: 0,
-            next_leaf: None,
-            cells: Vec::with_capacity(LEAF_MAX_CELLS + 1),
+            is_root: true,
+            page_idx: 0,
+            parent: Parent::default(),
+            next_leaf: NextLeaf::default(),
+            cells: Vec::with_capacity(MAX_CELLS + 1),
         }
     }
 
     pub fn new_from_page(page: &Page) -> Self {
-        let mut node = Self::new(true);
+        let mut node = Self::default();
         node.read_page(page);
         node
     }
@@ -60,12 +78,11 @@ impl Leaf {
 
         let mut parent = [0; 4];
         reader.read_exact(&mut parent).unwrap();
-        self.parent = u32::from_be_bytes(parent);
+        self.parent = Parent::new(u32::from_be_bytes(parent));
 
         let mut next = [0; 4];
         reader.read_exact(&mut next).unwrap();
-        let next = u32::from_be_bytes(next);
-        self.next_leaf = if next > 0 { Some(next) } else { None };
+        self.next_leaf = NextLeaf::new(u32::from_be_bytes(next));
 
         let mut num_cells = [0; 4];
         reader.read_exact(&mut num_cells).unwrap();
@@ -87,9 +104,10 @@ impl Leaf {
         // write node-type: is_leaf
         writer.write_all(&[u8::from(true)]).unwrap();
         writer.write_all(&[u8::from(self.is_root)]).unwrap();
-        writer.write_all(&self.parent.to_be_bytes()).unwrap();
-        let next = self.next_leaf.unwrap_or_default();
-        writer.write_all(&next.to_be_bytes()).unwrap();
+        writer.write_all(&self.parent.page.to_be_bytes()).unwrap();
+        writer
+            .write_all(&self.next_leaf.page.to_be_bytes())
+            .unwrap();
         let num_cells = self.cells.len() as u32;
         writer.write_all(&num_cells.to_be_bytes()).unwrap();
         for Cell { key, row } in &self.cells {
@@ -99,45 +117,11 @@ impl Leaf {
         cache
     }
 
-    pub fn update_cell(&mut self, cell_idx: usize, cell_val: &RowBytes) {
-        assert!(cell_idx < self.cells.len());
-        let val = &mut self.cells[cell_idx].row;
-        val.copy_from_slice(cell_val);
-    }
-
-    pub fn read_cell(&self, cell_idx: usize, cell_val: &mut RowBytes) {
-        cell_val.copy_from_slice(&self.cells[cell_idx].row);
-    }
-
-    pub fn get_cell_key(&self, cell_idx: usize) -> Option<u32> {
-        Some(self.cells.get(cell_idx)?.key)
-    }
-
-    pub fn insert_cell(&mut self, idx: usize, key: u32, val: &RowBytes) -> Result<(), ExecErr> {
-        if self.cells.len() >= LEAF_MAX_CELLS {
-            return Err(ExecErr::LeafNodeFull(
-                "Need to implement splitting a leaf node.".to_string(),
-            ));
-        }
-        assert!(idx <= self.cells.len());
-        self.cells.insert(idx, Cell::new(key, *val));
-
-        Ok(())
-    }
-
-    pub fn insert_and_split(&mut self, cell_idx: usize, key: u32, val: &RowBytes) -> Self {
-        assert_eq!(self.cells.len(), LEAF_MAX_CELLS);
-        assert!(cell_idx <= self.cells.len());
-        self.cells.insert(cell_idx, Cell::new(key, *val));
-
-        let cells: Vec<_> = self.cells.drain(SPLIT_IDX..).collect();
-        Self {
-            is_root: false,
-            parent: 0,
-            next_leaf: None,
-            cells,
-        }
-    }
+    // pub fn update_cell(&mut self, cell_idx: usize, cell_val: &RowBytes) {
+    //     assert!(cell_idx < self.cells.len());
+    //     let val = &mut self.cells[cell_idx].row;
+    //     val.copy_from_slice(cell_val);
+    // }
 
     /// This function will return one of the three kinds of positions:
     /// - the position of the key,
@@ -159,6 +143,48 @@ impl Leaf {
             }
         }
         lower // cell_idx
+    }
+
+    fn get_cell_key(&self, cell_idx: usize) -> Option<u32> {
+        Some(self.cells.get(cell_idx)?.key)
+    }
+
+    pub fn get_max_key(&self) -> u32 {
+        self.cells[self.cells.len() - 1].key
+    }
+
+    pub fn insert_cell(
+        &mut self,
+        cell_idx: usize,
+        key: u32,
+        val: &RowBytes,
+    ) -> Result<(), ExecErr> {
+        if self.cells.len() >= MAX_CELLS {
+            return Err(ExecErr::LeafNodeFull("Error: Leaf node full.".to_string()));
+        }
+        if self.get_cell_key(cell_idx).is_some_and(|k| k == key) {
+            return Err(ExecErr::DuplicateKey("Error: Duplicate key.".to_string()));
+        }
+
+        assert!(cell_idx <= self.cells.len());
+        self.cells.insert(cell_idx, Cell::new(key, *val));
+        Ok(())
+    }
+
+    pub fn insert_cell_and_split(&mut self, cell_idx: usize, key: u32, val: &RowBytes) -> Self {
+        assert_eq!(self.cells.len(), MAX_CELLS);
+        assert!(cell_idx <= self.cells.len());
+        self.cells.insert(cell_idx, Cell::new(key, *val));
+
+        let cells: Vec<_> = self.cells.drain(SPLIT_IDX..).collect();
+        Self {
+            cells,
+            ..Self::default()
+        }
+    }
+
+    pub fn read_cell(&self, cell_idx: usize, buf: &mut RowBytes) {
+        buf.copy_from_slice(&self.cells[cell_idx].row)
     }
 }
 

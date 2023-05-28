@@ -1,7 +1,19 @@
-mod intern;
-mod leaf;
-mod node;
+pub mod intern;
+pub mod leaf;
+pub mod node;
 
-pub use intern::Intern;
-pub use leaf::{Leaf, LEAF_HEADER_SIZE, LEAF_MAX_CELLS};
-pub use node::Node;
+use std::fmt;
+
+#[allow(unused)]
+#[derive(Debug)]
+pub enum BtreeErr {
+    EmptyNodeRc,
+}
+
+impl fmt::Display for BtreeErr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for BtreeErr {}

@@ -41,6 +41,7 @@ pub enum ExecErr {
     TableFull(String),
     DuplicateKey(String),
     LeafNodeFull(String),
+    InternNodeFull(String),
     PagerFull(String),
     PageNumOutBound(String),
     IoError(String),
@@ -54,6 +55,7 @@ impl Display for ExecErr {
             | Self::DuplicateKey(s)
             | Self::PagerFull(s)
             | Self::LeafNodeFull(s)
+            | Self::InternNodeFull(s)
             | Self::PageNumOutBound(s)
             | Self::IoError(s)
             | Self::NodeError(s) => write!(f, "{s}"),

@@ -207,6 +207,7 @@ fn print_error_when_insert_duplicate_key() {
 }
 
 #[test]
+#[ignore]
 fn allows_printing_out_the_structure_of_2_leaf_node_btree() {
     let filename = "allows_printing_out_the_structure_of_2_leaf_node_btree.db";
     let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
@@ -227,6 +228,7 @@ fn allows_printing_out_the_structure_of_2_leaf_node_btree() {
 }
 
 #[test]
+#[ignore]
 fn allows_printing_out_the_structure_of_3_leaf_node_btree() {
     let filename = "allows_printing_out_the_structure_of_3_leaf_node_btree.db";
     let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();

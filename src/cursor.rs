@@ -1,10 +1,11 @@
+use crate::btree::node::{Node, NodeRc2};
 use crate::error::ExecErr;
 use crate::row::RowBytes;
 use crate::Table;
 
 pub struct Cursor<'a> {
     table: &'a Table,
-    pub node_idx: usize,
+    pub node: NodeRc2,
     pub cell_idx: usize,
     pub end_of_table: bool,
 }
@@ -13,53 +14,56 @@ impl<'a> Cursor<'a> {
     pub fn new_at_table_start(table: &'a Table) -> Self {
         Self {
             table,
-            node_idx: table.find_start_leaf_node().unwrap(),
+            node: table.find_start_leaf_node().unwrap(),
             cell_idx: 0,
             end_of_table: table.is_empty(),
         }
     }
 
-    pub fn new_by_key(table: &'a Table, key: u32) -> Self {
-        let (page_idx, cell_idx) = table.find_page_and_cell_by_key(key).unwrap();
+    pub fn new_by_key(table: &'a Table, key: usize) -> Self {
+        let node = table.find_leaf_by_key(key);
+        let cell_idx = node.do_with_inner(|nd| nd.to_leaf_ref().find_place_for_new_cell(key));
         Self {
             table,
-            node_idx: page_idx,
+            node,
             cell_idx,
-            end_of_table: true,
+            end_of_table: true, // TODO
         }
     }
 
-    pub fn read_row(&mut self, buf: &mut RowBytes) -> Result<(), ExecErr> {
-        self.table.get_leaf_node_mut(self.node_idx, |nd| {
-            nd.read_cell(self.cell_idx, buf);
-            Ok(())
-        })
+    pub fn read_row(&self, buf: &mut RowBytes) -> Result<(), ExecErr> {
+        self.node
+            .do_with_inner(|nd| nd.to_leaf_ref().read_cell(self.cell_idx, buf));
+        Ok(())
     }
 
     pub fn insert_row(&mut self, key: u32, row: &RowBytes) -> Result<(), ExecErr> {
-        let node_idx = self.node_idx;
-        let cell_idx = self.cell_idx;
-        let res = self.table.get_leaf_node_mut(node_idx, |nd| {
-            if nd.get_cell_key(cell_idx).is_some_and(|k| k == key) {
-                return Err(ExecErr::DuplicateKey("Error: Duplicate key.".to_string()));
-            }
-            nd.insert_cell(cell_idx, key, row)
-        });
+        let res = self
+            .node
+            .modify_inner_with(|nd| nd.to_leaf_mut().insert_cell(self.cell_idx, key, row));
         match res {
-            Ok(()) => Ok(()),
-            Err(ExecErr::DuplicateKey(s)) => Err(ExecErr::DuplicateKey(s)),
-            Err(ExecErr::LeafNodeFull(_)) => self
-                .table
-                .split_leaf_and_insert_row(node_idx, cell_idx, key, row),
-            _ => todo!(),
+            Err(ExecErr::LeafNodeFull(_)) => self.split_leaf_and_insert_row(key, row),
+            other => other,
         }
+    }
+
+    fn split_leaf_and_insert_row(&mut self, key: u32, row: &RowBytes) -> Result<(), ExecErr> {
+        let leaf_new = self.node.modify_inner_with(|nd| {
+            nd.to_leaf_mut()
+                .insert_cell_and_split(self.cell_idx, key, row)
+        });
+
+        self.table.insert_leaf_node(
+            NodeRc2::clone(&self.node),
+            NodeRc2::new(Node::Leaf(leaf_new)),
+        )?;
+        Ok(())
     }
 
     pub fn advance(&mut self) -> Result<(), ExecErr> {
         self.cell_idx += 1;
-        self.table.get_leaf_node(self.node_idx, |nd| {
-            self.end_of_table = self.cell_idx >= nd.cells.len();
-            Ok(())
-        })
+        let cell_nums = self.node.do_with_inner(|nd| nd.to_leaf_ref().cells.len());
+        self.end_of_table = self.cell_idx >= cell_nums;
+        Ok(())
     }
 }
