@@ -117,12 +117,6 @@ impl Leaf {
         cache
     }
 
-    // pub fn update_cell(&mut self, cell_idx: usize, cell_val: &RowBytes) {
-    //     assert!(cell_idx < self.cells.len());
-    //     let val = &mut self.cells[cell_idx].row;
-    //     val.copy_from_slice(cell_val);
-    // }
-
     /// This function will return one of the three kinds of positions:
     /// - the position of the key,
     /// - the position of another key that we will need to move if we want to insert new cell
@@ -190,7 +184,12 @@ impl Leaf {
 
 impl fmt::Display for Leaf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "leaf (size {})", self.cells.len())?;
+        writeln!(
+            f,
+            "leaf (size {}, page {})",
+            self.cells.len(),
+            self.page_idx
+        )?;
         let cells_str: Vec<_> = self
             .cells
             .iter()

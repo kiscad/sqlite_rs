@@ -19,6 +19,7 @@ impl Table {
         let mut pager = Pager::open_database(filename)?;
 
         let root = if pager.num_pages == 0 {
+            pager.num_pages += 1;
             Node::Leaf(Leaf::new_root_leaf())
         } else {
             // the root node is always in page 0
@@ -54,15 +55,24 @@ impl Table {
     }
 
     pub fn insert_leaf_node(
-        &self,
+        &mut self,
         leaf_prev: NodeRc2,
         mut leaf_new: NodeRc2,
     ) -> Result<(), ExecErr> {
         if leaf_prev.is_root() {
-            // initialize a new root internal node.
+            let page_idx_root = leaf_prev.get_page_idx();
+            let page_idx_prev = self.pager.borrow().num_pages;
+            self.pager.borrow_mut().num_pages += 1;
+            let page_idx_new = self.pager.borrow().num_pages;
+            self.pager.borrow_mut().num_pages += 1;
+
+            // create a new root internal node.
             let mut root_new = Intern::new_root();
+            root_new.is_root = true;
+            root_new.page_idx = page_idx_root;
+
             let child_prev = {
-                let page = leaf_prev.get_page_idx() as u32;
+                let page = page_idx_prev as u32;
                 let key = leaf_prev.do_with_inner(|nd| nd.to_leaf_ref().get_max_key());
                 let node = NodeRc2::clone(&leaf_prev);
                 Child { page, key, node }
@@ -70,32 +80,25 @@ impl Table {
             root_new.children.push(child_prev);
 
             let child_new = {
-                let page = leaf_new.get_page_idx() as u32;
+                let page = page_idx_new as u32;
                 let key = 0; // dummy value for the rightmost child
                 let node = NodeRc2::clone(&leaf_new);
                 Child { page, key, node }
             };
             root_new.children.push(child_new);
-
-            root_new.is_root = true;
-            root_new.page_idx = leaf_prev.get_page_idx();
             let root_new = NodeRc2::new(Node::Intern(root_new));
 
-            // modify leaf_new
-            let new_page_idx = self.pager.borrow().num_pages;
-            self.pager.borrow_mut().num_pages += 1;
+            // update state of leaf_new
             let parent_new = root_new.new_parent_from_self();
             let next_leaf = leaf_prev.do_with_inner(|nd| nd.to_leaf_ref().next_leaf.clone());
             leaf_new.modify_inner_with(|nd| {
                 nd.set_root(false);
-                nd.set_page_idx(new_page_idx);
+                nd.set_page_idx(page_idx_new);
                 nd.set_parent(parent_new);
                 nd.to_leaf_mut().next_leaf = next_leaf;
             });
 
-            // modify leaf_prev
-            let new_page_idx = self.pager.borrow().num_pages;
-            self.pager.borrow_mut().num_pages += 1;
+            // update state of leaf_prev
             let parent_new = root_new.new_parent_from_self();
             let next_leaf = NextLeaf {
                 page: leaf_new.get_page_idx() as u32,
@@ -103,11 +106,12 @@ impl Table {
             };
             leaf_prev.modify_inner_with(|nd| {
                 nd.set_root(false);
-                nd.set_page_idx(new_page_idx);
+                nd.set_page_idx(page_idx_prev);
                 nd.set_parent(parent_new);
                 nd.to_leaf_mut().next_leaf = next_leaf;
             });
-            self.root.modify_inner_with(|nd| *nd = root_new.take());
+
+            self.root = root_new;
             return Ok(());
         }
         // initialize the page_idx field of leaf_new
@@ -143,28 +147,6 @@ impl Table {
         Ok(())
     }
 
-    // fn split_root_and_insert_node(&self, right: Leaf) -> Result<(), ExecErr> {
-    //     let page_idx = self.pager.borrow().num_pages as u32;
-    //
-    //     let new_root = match self.pager.borrow_mut().get_node_mut(self.root_idx)? {
-    //         Node::Intern(_) => todo!(),
-    //         leaf_root => {
-    //             let mut root =
-    //                 Node::Intern(Intern::new(page_idx, leaf_root.get_max_key(), page_idx + 1));
-    //             leaf_root.set_root(false);
-    //             leaf_root.set_parent(self.root_idx);
-    //             root.set_root(true);
-    //             root
-    //         }
-    //     };
-    //     let index = self.pager.borrow_mut().insert_node(new_root)?;
-    //     self.pager.borrow_mut().swap_pages(self.root_idx, index)?;
-    //     let mut right = Node::Leaf(right);
-    //     right.set_parent(self.root_idx);
-    //     self.pager.borrow_mut().insert_node(right)?;
-    //     Ok(())
-    // }
-
     pub fn find_leaf_by_key(&self, key: usize) -> NodeRc2 {
         self.find_leaf_by_key_rec(key, NodeRc2::clone(&self.root))
     }
@@ -182,19 +164,6 @@ impl Table {
                 self.find_leaf_by_key_rec(key, NodeRc2::clone(node))
             })
         }
-        // node.do_with_inner(|node| match node {
-        //     Node::Leaf(_) => NodeRc2::clone(&node),
-        //     Node::Intern(nd) => {
-        //         let (_, Child { page, node, .. }) = nd.get_child_by_key(key);
-        //         if node.is_none() {
-        //             let n = self.load_node(*page as usize).unwrap();
-        //             let _ = node.set_inner(n);
-        //         }
-        //         self.find_leaf_by_key_rec(key, NodeRc2::clone(node))
-        //     }
-        // })
-        // match node.inner_ref() {
-        // }
     }
 
     pub fn find_start_leaf_node(&self) -> Result<NodeRc2, ExecErr> {
@@ -215,17 +184,6 @@ impl Table {
                 self.find_start_leaf_node_rec(NodeRc2::clone(node))
             })
         }
-        // match node.inner_ref() {
-        //     Node::Leaf(_) => Ok(node),
-        //     Node::Intern(nd) => {
-        //         let Child { page, node, .. } = &nd.children[0];
-        //         if node.is_none() {
-        //             let n = self.load_node(*page as usize).unwrap();
-        //             let _ = node.set_inner(n);
-        //         }
-        //         self.find_start_leaf_node_rec(NodeRc2::clone(node))
-        //     }
-        // }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -237,7 +195,8 @@ impl Table {
 
     fn load_node(&self, page_idx: usize) -> Result<Node, ExecErr> {
         let buf = self.pager.borrow_mut().read_page(page_idx)?;
-        let node = Node::new_from_page(&buf);
+        let mut node = Node::new_from_page(&buf);
+        node.set_page_idx(page_idx);
         Ok(node)
     }
 

@@ -9,7 +9,7 @@ fn main() {
         process::exit(1);
     });
 
-    let table = Table::open_db(filename).unwrap_or_else(|e| {
+    let mut table = Table::open_db(filename).unwrap_or_else(|e| {
         eprintln!("{e}");
         process::exit(1);
     });
@@ -21,7 +21,7 @@ fn main() {
         read_command(&mut cmd_line);
 
         use sqlite_rs::error::DbError;
-        match sqlite_rs::run_cmd(&cmd_line, &table) {
+        match sqlite_rs::run_cmd(&cmd_line, &mut table) {
             Ok(_) => println!("Executed."),
             Err(DbError::MetaCmdErr(e)) => eprintln!("{e}"),
             Err(DbError::PrepareErr(e)) => eprintln!("{e}"),

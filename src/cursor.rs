@@ -4,23 +4,25 @@ use crate::row::RowBytes;
 use crate::Table;
 
 pub struct Cursor<'a> {
-    table: &'a Table,
+    table: &'a mut Table,
     pub node: NodeRc2,
     pub cell_idx: usize,
     pub end_of_table: bool,
 }
 
 impl<'a> Cursor<'a> {
-    pub fn new_at_table_start(table: &'a Table) -> Self {
+    pub fn new_at_table_start(table: &'a mut Table) -> Self {
+        let node = table.find_start_leaf_node().unwrap();
+        let end_of_table = table.is_empty();
         Self {
             table,
-            node: table.find_start_leaf_node().unwrap(),
+            node,
             cell_idx: 0,
-            end_of_table: table.is_empty(),
+            end_of_table,
         }
     }
 
-    pub fn new_by_key(table: &'a Table, key: usize) -> Self {
+    pub fn new_by_key(table: &'a mut Table, key: usize) -> Self {
         let node = table.find_leaf_by_key(key);
         let cell_idx = node.do_with_inner(|nd| nd.to_leaf_ref().find_place_for_new_cell(key));
         Self {

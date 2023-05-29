@@ -162,7 +162,7 @@ fn print_structure_of_leaf_node() {
             "db > Executed.",
             "db > Executed.",
             "db > Tree:",
-            "leaf (size 3)",
+            "leaf (size 3, page 0)",
             "  - 1",
             "  - 2",
             "  - 3",
@@ -207,7 +207,6 @@ fn print_error_when_insert_duplicate_key() {
 }
 
 #[test]
-#[ignore]
 fn allows_printing_out_the_structure_of_2_leaf_node_btree() {
     let filename = "allows_printing_out_the_structure_of_2_leaf_node_btree.db";
     let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
@@ -219,9 +218,9 @@ fn allows_printing_out_the_structure_of_2_leaf_node_btree() {
 
     let _ = std::fs::remove_file(filename);
     let mut expect: String = (0..14).map(|_| "db > Executed.\n").collect();
-    expect.push_str("db > Tree:\ninternal (size 1)\n  leaf (size 7)\n");
+    expect.push_str("db > Tree:\ninternal (size 2, page 0)\n  leaf (size 7, page 1)\n");
     expect.push_str(&(0..7).map(|i| format!("    - {i}\n")).collect::<String>());
-    expect.push_str("  leaf (size 7)\n");
+    expect.push_str("  leaf (size 7, page 2)\n");
     expect.push_str(&(7..14).map(|i| format!("    - {i}\n")).collect::<String>());
     expect.push_str("\nExecuted.\ndb > ");
     assert.success().stdout(expect);

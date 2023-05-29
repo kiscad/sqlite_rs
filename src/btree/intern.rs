@@ -134,6 +134,11 @@ impl Intern {
 
 impl fmt::Display for Intern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "internal (size {})", self.children.len() + 1)
+        writeln!(
+            f,
+            "internal (size {}, page {})",
+            self.children.len(),
+            self.page_idx
+        )
     }
 }

@@ -8,7 +8,7 @@ use std::path::Path;
 pub const PAGE_SIZE: usize = 4096;
 pub type Page = [u8; PAGE_SIZE];
 
-/// Pager 是磁盘上的数据库文件，在内存上的缓存
+/// Pager is a in-memory cache for database file.
 pub struct Pager {
     file: File,
     pub num_pages: usize,

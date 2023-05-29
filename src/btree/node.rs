@@ -92,7 +92,7 @@ impl NodeWk2 {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Parent {
     pub page: u32,
     pub node: NodeWk2,
@@ -161,13 +161,6 @@ impl Node {
             Self::Leaf(nd) => nd.is_root = is_root,
         }
     }
-
-    // pub fn set_parent(&mut self, parent: usize) {
-    //     match self {
-    //         Self::Leaf(nd) => nd.parent = parent as u32,
-    //         Self::Intern(nd) => nd.parent = parent as u32,
-    //     }
-    // }
 
     pub fn serialize(&self) -> Page {
         match self {
@@ -241,17 +234,6 @@ impl Node {
             Self::Leaf(_) => panic!(),
         }
     }
-
-    // pub fn get_children(&self) -> Vec<u32> {
-    //     match self {
-    //         Self::Leaf(_) => vec![],
-    //         Self::Intern(nd) => {
-    //             let mut pages: Vec<u32> = nd.children.iter().map(|x| x.page).collect();
-    //             pages.push(nd.right_child);
-    //             pages
-    //         }
-    //     }
-    // }
 }
 
 impl fmt::Display for Node {

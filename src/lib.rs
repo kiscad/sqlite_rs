@@ -17,7 +17,7 @@ use row::Row;
 
 pub use table::Table;
 
-pub fn run_cmd(cmd_str: &str, table: &Table) -> Result<(), DbError> {
+pub fn run_cmd(cmd_str: &str, table: &mut Table) -> Result<(), DbError> {
     if cmd_str.starts_with('.') {
         return do_meta_command(cmd_str, table).map_err(DbError::MetaCmdErr);
     }
@@ -97,7 +97,7 @@ fn prepare_statement(cmd_str: &str) -> Result<Statement, PrepareErr> {
     }
 }
 
-fn execute_statement(stmt: &Statement, table: &Table) -> Result<(), ExecErr> {
+fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr> {
     use Statement::*;
     match stmt {
         Insert(row) => execute_insert(row, table),
@@ -105,14 +105,14 @@ fn execute_statement(stmt: &Statement, table: &Table) -> Result<(), ExecErr> {
     }
 }
 
-fn execute_insert(row: &Row, table: &Table) -> Result<(), ExecErr> {
+fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
     let key = row.id;
     let mut cursor = Cursor::new_by_key(table, key as usize);
     row.insert_to(&mut cursor)?;
     Ok(())
 }
 
-fn execute_select(table: &Table) -> Result<(), ExecErr> {
+fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
     let mut cursor = Cursor::new_at_table_start(table);
     while !cursor.end_of_table {
         let mut row = Row::default();
