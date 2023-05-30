@@ -1,4 +1,4 @@
-use crate::btree::node::{NodeWk2, Parent};
+use crate::btree::node::{NodeWk, Parent};
 use crate::error::ExecErr;
 use crate::pager::{Page, PAGE_SIZE};
 use crate::row::{RowBytes, ROW_SIZE};
@@ -21,7 +21,7 @@ pub struct Cell {
     pub row: RowBytes,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Leaf {
     pub is_root: bool,
     pub page_idx: usize,
@@ -30,17 +30,17 @@ pub struct Leaf {
     pub cells: Vec<Cell>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct NextLeaf {
     pub page: u32,
-    pub node: NodeWk2,
+    pub node: NodeWk,
 }
 
 impl NextLeaf {
     fn new(page: u32) -> Self {
         Self {
             page,
-            node: NodeWk2::default(),
+            node: NodeWk::default(),
         }
     }
 }

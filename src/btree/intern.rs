@@ -1,15 +1,15 @@
 use super::node::Parent;
-use crate::btree::node::NodeRc2;
+use crate::btree::node::NodeRc;
 use crate::error::ExecErr;
 use crate::pager::{Page, PAGE_SIZE};
 use std::fmt;
 use std::io::{self, BufRead, Read, Write};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Child {
     pub page: u32,
     pub key: u32,
-    pub node: NodeRc2,
+    pub node: NodeRc,
 }
 
 impl Child {
@@ -17,12 +17,12 @@ impl Child {
         Self {
             page,
             key,
-            node: NodeRc2::default(),
+            node: NodeRc::default(),
         }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Intern {
     pub is_root: bool,
     pub page_idx: usize,
@@ -114,7 +114,7 @@ impl Intern {
         let right_child = Child {
             page: u32::from_be_bytes(right),
             key: 0, // dummy value for the right-most child
-            node: NodeRc2::default(),
+            node: NodeRc::default(),
         };
 
         self.children.clear();

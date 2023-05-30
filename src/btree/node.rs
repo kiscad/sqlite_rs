@@ -7,10 +7,10 @@ use std::fmt;
 use std::io::{self, Read};
 use std::rc::{Rc, Weak};
 
-#[derive(Clone)]
-pub struct NodeRc2(Rc<RefCell<Option<Node>>>);
+#[derive(Debug, Clone)]
+pub struct NodeRc(Rc<RefCell<Option<Node>>>);
 
-impl NodeRc2 {
+impl NodeRc {
     pub fn default() -> Self {
         Self(Rc::new(RefCell::new(None)))
     }
@@ -24,7 +24,7 @@ impl NodeRc2 {
         self.0.borrow().as_ref().map(|x| x.is_root()).unwrap()
     }
     pub fn is_leaf(&self) -> bool {
-        self.do_with_inner(|nd| nd.is_leaf())
+        self.get_with(|nd| nd.is_leaf())
     }
     pub fn get_page_idx(&self) -> usize {
         self.0.borrow().as_ref().map(|x| x.get_page_idx()).unwrap()
@@ -37,18 +37,18 @@ impl NodeRc2 {
             .unwrap();
     }
 
-    pub fn get_parent(&self) -> NodeRc2 {
-        self.do_with_inner(|nd| nd.get_parent())
+    pub fn get_parent(&self) -> NodeRc {
+        self.get_with(|nd| nd.get_parent())
     }
 
-    pub fn downgrade(node: &Self) -> NodeWk2 {
-        NodeWk2(Rc::downgrade(&node.0))
+    pub fn downgrade(node: &Self) -> NodeWk {
+        NodeWk(Rc::downgrade(&node.0))
     }
 
     pub fn new_parent_from_self(&self) -> Parent {
         Parent {
             page: self.get_page_idx() as u32,
-            node: NodeRc2::downgrade(self),
+            node: NodeRc::downgrade(self),
         }
     }
 
@@ -56,14 +56,14 @@ impl NodeRc2 {
         self.0.take().unwrap()
     }
 
-    pub fn do_with_inner<F, T>(&self, mut f: F) -> T
+    pub fn get_with<F, T>(&self, mut f: F) -> T
     where
         F: FnMut(&Node) -> T,
     {
         f(self.0.borrow().as_ref().unwrap())
     }
 
-    pub fn modify_inner_with<F, T>(&self, f: F) -> T
+    pub fn set_with<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&mut Node) -> T,
     {
@@ -83,30 +83,31 @@ impl NodeRc2 {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct NodeWk2(Weak<RefCell<Option<Node>>>);
+#[derive(Default, Clone, Debug)]
+pub struct NodeWk(Weak<RefCell<Option<Node>>>);
 
-impl NodeWk2 {
-    pub fn upgrade(&self) -> Option<NodeRc2> {
-        Some(NodeRc2(self.0.upgrade()?))
+impl NodeWk {
+    pub fn upgrade(&self) -> Option<NodeRc> {
+        Some(NodeRc(self.0.upgrade()?))
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Parent {
     pub page: u32,
-    pub node: NodeWk2,
+    pub node: NodeWk,
 }
 
 impl Parent {
     pub fn new(page: u32) -> Self {
         Self {
             page,
-            node: NodeWk2::default(),
+            node: NodeWk::default(),
         }
     }
 }
 
+#[derive(Debug)]
 pub enum Node {
     Intern(Intern),
     Leaf(Leaf),
@@ -127,7 +128,7 @@ impl Node {
         }
     }
 
-    fn get_parent(&self) -> NodeRc2 {
+    fn get_parent(&self) -> NodeRc {
         match self {
             Self::Intern(nd) => nd.parent.node.upgrade().unwrap(),
             Self::Leaf(nd) => nd.parent.node.upgrade().unwrap(),
