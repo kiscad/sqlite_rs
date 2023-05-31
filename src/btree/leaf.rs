@@ -2,6 +2,7 @@ use crate::btree::node::{NodeWk, Parent};
 use crate::error::ExecErr;
 use crate::pager::{Page, PAGE_SIZE};
 use crate::row::{RowBytes, ROW_SIZE};
+use std::fmt::Formatter;
 use std::io::{self, BufRead, Read, Write};
 use std::{fmt, mem};
 
@@ -21,7 +22,7 @@ pub struct Cell {
     pub row: RowBytes,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct Leaf {
     pub is_root: bool,
     pub page_idx: usize,
@@ -196,5 +197,16 @@ impl fmt::Display for Leaf {
             .map(|Cell { key, .. }| format!("  - {}", key))
             .collect();
         write!(f, "{}", cells_str.join("\n"))
+    }
+}
+
+impl fmt::Debug for Leaf {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        writeln!(f, "leaf:")?;
+        writeln!(f, "  is_root   : {}", self.is_root)?;
+        writeln!(f, "  page_idx  : {}", self.page_idx)?;
+        writeln!(f, "  parent    : {:?}", self.parent)?;
+        writeln!(f, "  next_leaf : {:?}", self.next_leaf)?;
+        writeln!(f, "  cell-nums : {}", self.cells.len())
     }
 }

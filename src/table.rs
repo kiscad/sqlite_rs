@@ -1,13 +1,13 @@
 // use crate::btree::{Child, Leaf, Node, NodeRc};
 use crate::btree::intern::{Child, Intern};
 use crate::btree::leaf::{Leaf, NextLeaf};
-use crate::btree::node::{Node, NodeRc, Parent};
+use crate::btree::node::{Node, NodeRc, NodeWk, Parent};
 use crate::error::ExecErr;
 use crate::pager::Pager;
 use std::cell::RefCell;
 use std::path::Path;
 
-// pub const TABLE_MAX_PAGES: usize = 100;
+pub const TABLE_MAX_PAGES: usize = 100;
 
 pub struct Table {
     pub pager: RefCell<Pager>,
@@ -25,9 +25,11 @@ impl Table {
             // the root node is always in page 0
             pager.load_node_from_page(0)?
         };
+        let root = NodeRc::new(root);
+        let _ = pager.pages[0].insert(NodeRc::downgrade(&root));
 
         Ok(Self {
-            root: NodeRc::new(root),
+            root,
             pager: RefCell::new(pager),
         })
     }
@@ -110,7 +112,7 @@ impl Table {
         });
 
         self.root = root_new;
-        return Ok(());
+        Ok(())
     }
 
     pub fn insert_leaf_node(&mut self, leaf_prev: NodeRc, leaf_new: NodeRc) -> Result<(), ExecErr> {
@@ -175,7 +177,8 @@ impl Table {
             node.get_with(|nd| {
                 let (_, Child { page, node, .. }) = nd.to_intern_ref().get_child_by_key(key);
                 if node.is_none() {
-                    let n = self.load_node(*page as usize).unwrap();
+                    let parent_page = nd.get_page_idx();
+                    let n = self.load_node(*page as usize, parent_page).unwrap();
                     NodeRc::clone(node).set_inner(n);
                 }
                 self.find_leaf_by_key_rec(key, NodeRc::clone(node))
@@ -195,7 +198,8 @@ impl Table {
             node.get_with(|nd| {
                 let Child { page, node, .. } = &nd.to_intern_ref().children[0];
                 if node.is_none() {
-                    let n = self.load_node(*page as usize).unwrap();
+                    let parent_page = nd.get_page_idx();
+                    let n = self.load_node(*page as usize, parent_page).unwrap();
                     NodeRc::clone(node).set_inner(n);
                 }
                 self.find_start_leaf_node_rec(NodeRc::clone(node))
@@ -210,10 +214,15 @@ impl Table {
         })
     }
 
-    fn load_node(&self, page_idx: usize) -> Result<Node, ExecErr> {
+    fn load_node(&self, page_idx: usize, parent_page: usize) -> Result<Node, ExecErr> {
         let buf = self.pager.borrow_mut().read_page(page_idx)?;
         let mut node = Node::new_from_page(&buf);
         node.set_page_idx(page_idx);
+        let parent = Parent {
+            page: parent_page as u32,
+            node: NodeWk::clone(self.pager.borrow().pages[parent_page].as_ref().unwrap()),
+        };
+        node.set_parent(parent);
         Ok(node)
     }
 
@@ -234,7 +243,8 @@ impl Table {
             let mut string = String::new();
             for Child { page, node, .. } in &intern.to_intern_ref().children {
                 if node.is_none() {
-                    let n = self.load_node(*page as usize).unwrap();
+                    let parent_page = intern.get_page_idx();
+                    let n = self.load_node(*page as usize, parent_page).unwrap();
                     NodeRc::clone(node).set_inner(n);
                 }
                 let s: String = self

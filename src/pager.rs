@@ -1,6 +1,6 @@
-use crate::btree::node::Node;
+use crate::btree::node::{Node, NodeWk};
 use crate::error::ExecErr;
-// use crate::table::TABLE_MAX_PAGES;
+use crate::table::TABLE_MAX_PAGES;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -12,7 +12,7 @@ pub type Page = [u8; PAGE_SIZE];
 pub struct Pager {
     file: File,
     pub num_pages: usize,
-    // pub pages: [Option<Weak<RefCell<Node>>>; TABLE_MAX_PAGES],
+    pub pages: [Option<NodeWk>; TABLE_MAX_PAGES],
 }
 
 impl Pager {
@@ -32,8 +32,14 @@ impl Pager {
                 "Db file is not a whole number of pages. Corrupt file.".to_string(),
             ));
         }
+        const INIT: Option<NodeWk> = None;
+        let pages = [INIT; TABLE_MAX_PAGES];
 
-        Ok(Self { file, num_pages })
+        Ok(Self {
+            file,
+            num_pages,
+            pages,
+        })
     }
 
     pub fn load_node_from_page(&mut self, page_idx: usize) -> Result<Node, ExecErr> {
