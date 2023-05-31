@@ -1,4 +1,5 @@
-use crate::btree::node::{Node, NodeRc};
+use crate::btree::node::Node;
+use crate::btree::NodeRc;
 use crate::error::ExecErr;
 use crate::row::RowBytes;
 use crate::Table;

@@ -1,6 +1,9 @@
 pub mod intern;
 pub mod leaf;
 pub mod node;
+mod wrapper;
+
+pub use wrapper::{NodeRc, NodeWk};
 
 use std::fmt;
 

@@ -1,5 +1,5 @@
 use super::node::Parent;
-use crate::btree::node::NodeRc;
+use crate::btree::NodeRc;
 use crate::error::ExecErr;
 use crate::pager::{Page, PAGE_SIZE};
 use std::fmt;
@@ -26,7 +26,7 @@ impl Child {
 pub struct Intern {
     pub is_root: bool,
     pub page_idx: usize,
-    pub parent: Parent,
+    pub parent: Option<Parent>,
     pub children: Vec<Child>,
 }
 
@@ -35,7 +35,7 @@ impl Intern {
         Self {
             is_root: true,
             page_idx: 0,
-            parent: Parent::default(),
+            parent: None,
             children: vec![],
         }
     }
@@ -83,7 +83,14 @@ impl Intern {
         // write node-type: is-leaf
         writer.write_all(&[u8::from(false)]).unwrap();
         writer.write_all(&[u8::from(self.is_root)]).unwrap();
-        writer.write_all(&self.parent.page.to_be_bytes()).unwrap();
+        writer
+            .write_all(
+                &self
+                    .parent
+                    .as_ref()
+                    .map_or(0u32.to_be_bytes(), |x| x.page.to_be_bytes()),
+            )
+            .unwrap();
         let num_keys = self.children.len() - 1;
         writer.write_all(&(num_keys as u32).to_be_bytes()).unwrap();
         // write rightmost-child-page-idx
@@ -105,7 +112,10 @@ impl Intern {
         self.is_root = is_root[0] != 0;
         let mut parent = [0; 4];
         reader.read_exact(&mut parent).unwrap();
-        self.parent = Parent::new(u32::from_be_bytes(parent));
+        self.parent = match u32::from_be_bytes(parent) {
+            0 => None,
+            x => Some(Parent::new(x)),
+        };
         let mut num_keys = [0; 4];
         reader.read_exact(&mut num_keys).unwrap();
         let num_keys = u32::from_be_bytes(num_keys);

@@ -1,4 +1,5 @@
-use crate::btree::node::{NodeWk, Parent};
+use super::NodeWk;
+use crate::btree::node::Parent;
 use crate::error::ExecErr;
 use crate::pager::{Page, PAGE_SIZE};
 use crate::row::{RowBytes, ROW_SIZE};
@@ -26,8 +27,8 @@ pub struct Cell {
 pub struct Leaf {
     pub is_root: bool,
     pub page_idx: usize,
-    pub parent: Parent,
-    pub next_leaf: NextLeaf,
+    pub parent: Option<Parent>,
+    pub next_leaf: Option<NextLeaf>,
     pub cells: Vec<Cell>,
 }
 
@@ -57,8 +58,8 @@ impl Leaf {
         Self {
             is_root: true,
             page_idx: 0,
-            parent: Parent::default(),
-            next_leaf: NextLeaf::default(),
+            parent: None,
+            next_leaf: None,
             cells: Vec::with_capacity(MAX_CELLS + 1),
         }
     }
@@ -79,11 +80,17 @@ impl Leaf {
 
         let mut parent = [0; 4];
         reader.read_exact(&mut parent).unwrap();
-        self.parent = Parent::new(u32::from_be_bytes(parent));
+        self.parent = match u32::from_be_bytes(parent) {
+            0 => None,
+            x => Some(Parent::new(x)),
+        };
 
         let mut next = [0; 4];
         reader.read_exact(&mut next).unwrap();
-        self.next_leaf = NextLeaf::new(u32::from_be_bytes(next));
+        self.next_leaf = match u32::from_be_bytes(next) {
+            0 => None,
+            x => Some(NextLeaf::new(x)),
+        };
 
         let mut num_cells = [0; 4];
         reader.read_exact(&mut num_cells).unwrap();
@@ -105,9 +112,21 @@ impl Leaf {
         // write node-type: is_leaf
         writer.write_all(&[u8::from(true)]).unwrap();
         writer.write_all(&[u8::from(self.is_root)]).unwrap();
-        writer.write_all(&self.parent.page.to_be_bytes()).unwrap();
         writer
-            .write_all(&self.next_leaf.page.to_be_bytes())
+            .write_all(
+                &self
+                    .parent
+                    .as_ref()
+                    .map_or(0u32.to_be_bytes(), |x| x.page.to_be_bytes()),
+            )
+            .unwrap();
+        writer
+            .write_all(
+                &self
+                    .next_leaf
+                    .as_ref()
+                    .map_or(0u32.to_be_bytes(), |x| x.page.to_be_bytes()),
+            )
             .unwrap();
         let num_cells = self.cells.len() as u32;
         writer.write_all(&num_cells.to_be_bytes()).unwrap();

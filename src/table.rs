@@ -1,7 +1,8 @@
 // use crate::btree::{Child, Leaf, Node, NodeRc};
 use crate::btree::intern::{Child, Intern};
 use crate::btree::leaf::{Leaf, NextLeaf};
-use crate::btree::node::{Node, NodeRc, NodeWk, Parent};
+use crate::btree::node::{Node, Parent};
+use crate::btree::{NodeRc, NodeWk};
 use crate::error::ExecErr;
 use crate::pager::Pager;
 use std::cell::RefCell;
@@ -108,7 +109,7 @@ impl Table {
             nd.set_root(false);
             nd.set_page_idx(page_idx_prev);
             nd.set_parent(parent_new);
-            nd.to_leaf_mut().next_leaf = next_leaf;
+            let _ = nd.to_leaf_mut().next_leaf.insert(next_leaf);
         });
 
         self.root = root_new;
@@ -133,11 +134,11 @@ impl Table {
                 page: leaf_new.get_page_idx() as u32,
                 node: NodeRc::downgrade(&leaf_new),
             };
-            nd.to_leaf_mut().next_leaf = next_leaf
+            let _ = nd.to_leaf_mut().next_leaf.insert(next_leaf);
         });
 
         // insert leaf_new and update the parent.
-        let parent = leaf_prev.get_with(|nd| nd.to_leaf_ref().parent.node.upgrade().unwrap());
+        let parent = leaf_prev.get_parent().unwrap();
         parent.set_with(|nd| {
             let page = leaf_new.get_page_idx() as u32;
             let key = leaf_new.get_with(|nd| nd.to_leaf_ref().get_max_key());
@@ -223,7 +224,7 @@ impl Table {
             node: NodeWk::clone(self.pager.borrow().pages[parent_page].as_ref().unwrap()),
         };
         node.set_parent(parent);
-        Ok(node)
+        Ok(node) // TODO return NodeRc type
     }
 
     pub fn btree_to_str(&self) -> String {
