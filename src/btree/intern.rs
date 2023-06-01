@@ -9,7 +9,7 @@ use std::io::{self, BufRead, Read, Write};
 pub struct Child {
     pub page: u32,
     pub key: u32,
-    pub node: NodeRc,
+    pub node: Option<NodeRc>,
 }
 
 impl Child {
@@ -17,7 +17,7 @@ impl Child {
         Self {
             page,
             key,
-            node: NodeRc::default(),
+            node: None,
         }
     }
 }
@@ -44,7 +44,15 @@ impl Intern {
         self.children.len() - 1
     }
 
-    pub fn get_child_by_key(&self, key: usize) -> (usize, &Child) {
+    pub fn set_child_by_key_with<F, T>(&mut self, key: usize, mut f: F) -> T
+    where
+        F: FnMut(&mut Child) -> T,
+    {
+        let idx = self.search_child_by_key(key);
+        f(&mut self.children[idx])
+    }
+
+    pub fn search_child_by_key(&self, key: usize) -> usize {
         // binary search
         let mut lower = 0;
         let mut upper = self.get_key_nums();
@@ -57,7 +65,7 @@ impl Intern {
                 lower = mid + 1;
             }
         }
-        (lower, &self.children[lower])
+        lower
     }
 
     pub fn insert_child(&mut self, child_idx: usize, child: &Child) -> Result<(), ExecErr> {
@@ -124,7 +132,7 @@ impl Intern {
         let right_child = Child {
             page: u32::from_be_bytes(right),
             key: 0, // dummy value for the right-most child
-            node: NodeRc::default(),
+            node: None,
         };
 
         self.children.clear();

@@ -1,5 +1,5 @@
 use crate::btree::node::Node;
-use crate::btree::NodeWk;
+use crate::btree::NodeRc;
 use crate::error::ExecErr;
 use crate::table::TABLE_MAX_PAGES;
 use std::fs::{File, OpenOptions};
@@ -13,7 +13,7 @@ pub type Page = [u8; PAGE_SIZE];
 pub struct Pager {
     file: File,
     pub num_pages: usize,
-    pub pages: [Option<NodeWk>; TABLE_MAX_PAGES],
+    pub pages: [Option<NodeRc>; TABLE_MAX_PAGES],
 }
 
 impl Pager {
@@ -33,7 +33,7 @@ impl Pager {
                 "Db file is not a whole number of pages. Corrupt file.".to_string(),
             ));
         }
-        const INIT: Option<NodeWk> = None;
+        const INIT: Option<NodeRc> = None;
         let pages = [INIT; TABLE_MAX_PAGES];
 
         Ok(Self {
@@ -63,7 +63,14 @@ impl Pager {
             .map_err(|_| ExecErr::IoError("Error: Fail writing.".to_string()))
     }
 
-    pub fn read_page(&mut self, page_idx: usize) -> Result<Page, ExecErr> {
+    pub fn write_node(&mut self, page_idx: usize) -> Result<(), ExecErr> {
+        if let Some(nd) = &self.pages[page_idx] {
+            self.write_page(page_idx, &nd.serialize())?;
+        }
+        Ok(())
+    }
+
+    fn read_page(&mut self, page_idx: usize) -> Result<Page, ExecErr> {
         let mut buf = [0; PAGE_SIZE];
         self.file
             .seek(SeekFrom::Start((page_idx * PAGE_SIZE) as u64))
@@ -72,5 +79,12 @@ impl Pager {
             .read_exact(&mut buf)
             .map_err(|_| ExecErr::IoError("Error: Fail reading.".to_string()))?;
         Ok(buf)
+    }
+
+    pub fn read_node(&mut self, page_idx: usize) -> Result<NodeRc, ExecErr> {
+        let page = self.read_page(page_idx)?;
+        let node = NodeRc::new(Node::new_from_page(&page));
+        let res = self.pages[page_idx].insert(node);
+        Ok(NodeRc::clone(res))
     }
 }

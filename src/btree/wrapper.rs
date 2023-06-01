@@ -1,36 +1,31 @@
 use super::node::{Node, Parent};
 use crate::pager::Page;
 use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
 use std::rc::{Rc, Weak};
 
 #[derive(Debug, Clone)]
-pub struct NodeRc(Rc<RefCell<Option<Node>>>);
+pub struct NodeRc(Rc<RefCell<Node>>);
+
+#[derive(Default, Clone, Debug)]
+pub struct NodeWk(Weak<RefCell<Node>>);
 
 impl NodeRc {
-    pub fn default() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
     pub fn new(node: Node) -> Self {
-        Self(Rc::new(RefCell::new(Some(node))))
+        Self(Rc::new(RefCell::new(node)))
     }
-    pub fn is_none(&self) -> bool {
-        self.0.borrow().is_none()
-    }
+
     pub fn is_root(&self) -> bool {
-        self.0.borrow().as_ref().map(|x| x.is_root()).unwrap()
+        self.0.borrow().is_root()
     }
     pub fn is_leaf(&self) -> bool {
         self.get_with(|nd| nd.is_leaf())
     }
     pub fn get_page_idx(&self) -> usize {
-        self.0.borrow().as_ref().map(|x| x.get_page_idx()).unwrap()
+        self.0.borrow().get_page_idx()
     }
     pub fn set_page_idx(&mut self, page_idx: usize) {
-        self.0
-            .borrow_mut()
-            .as_mut()
-            .map(|x| x.set_page_idx(page_idx))
-            .unwrap();
+        self.0.borrow_mut().set_page_idx(page_idx);
     }
 
     pub fn get_parent(&self) -> Option<NodeRc> {
@@ -48,39 +43,28 @@ impl NodeRc {
         }
     }
 
-    pub fn take(self) -> Node {
-        self.0.take().unwrap()
-    }
-
     pub fn get_with<F, T>(&self, mut f: F) -> T
     where
         F: FnMut(&Node) -> T,
     {
-        f(self.0.borrow().as_ref().unwrap())
+        f(self.0.borrow().deref())
     }
 
     pub fn set_with<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&mut Node) -> T,
     {
-        f(self.0.borrow_mut().as_mut().unwrap())
-    }
-
-    pub fn set_inner(&mut self, node: Node) {
-        let _ = self.0.borrow_mut().insert(node);
+        f(self.0.borrow_mut().deref_mut())
     }
 
     pub fn serialize(&self) -> Page {
-        self.0.borrow().as_ref().map(|x| x.serialize()).unwrap()
+        self.0.borrow().serialize()
     }
 
     pub fn clone(node: &Self) -> Self {
         Self(Rc::clone(&node.0))
     }
 }
-
-#[derive(Default, Clone, Debug)]
-pub struct NodeWk(Weak<RefCell<Option<Node>>>);
 
 impl NodeWk {
     pub fn upgrade(&self) -> Option<NodeRc> {

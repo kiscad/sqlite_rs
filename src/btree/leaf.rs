@@ -35,15 +35,12 @@ pub struct Leaf {
 #[derive(Default, Clone, Debug)]
 pub struct NextLeaf {
     pub page: u32,
-    pub node: NodeWk,
+    pub node: Option<NodeWk>,
 }
 
 impl NextLeaf {
     fn new(page: u32) -> Self {
-        Self {
-            page,
-            node: NodeWk::default(),
-        }
+        Self { page, node: None }
     }
 }
 
