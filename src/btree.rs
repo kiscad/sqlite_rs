@@ -10,13 +10,13 @@ use std::fmt;
 #[allow(unused)]
 #[derive(Debug)]
 pub enum BtreeErr {
-    EmptyNodeRc,
+  EmptyNodeRc,
 }
 
 impl fmt::Display for BtreeErr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{self:?}")
+  }
 }
 
 impl std::error::Error for BtreeErr {}
