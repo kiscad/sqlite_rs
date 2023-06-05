@@ -15,32 +15,36 @@ impl<'a> Cursor<'a> {
   pub fn new_at_table_start(table: &'a mut Table) -> Self {
     let node = table.find_start_leaf_node().unwrap();
     let end_of_table = table.is_empty();
-    Self { table,
-           node,
-           cell_idx: 0,
-           end_of_table }
+    Self {
+      table,
+      node,
+      cell_idx: 0,
+      end_of_table,
+    }
   }
 
   pub fn new_by_key(table: &'a mut Table, key: usize) -> Self {
     let node = table.find_leaf_by_key(key);
     let cell_idx = node.get_with(|nd| nd.to_leaf_ref().find_place_for_new_cell(key));
     Self {
-            table,
-            node,
-            cell_idx,
-            end_of_table: true, // TODO
-        }
+      table,
+      node,
+      cell_idx,
+      end_of_table: true, // TODO
+    }
   }
 
   pub fn read_row(&self, buf: &mut RowBytes) -> Result<(), ExecErr> {
-    self.node
-        .get_with(|nd| nd.to_leaf_ref().read_cell(self.cell_idx, buf));
+    self
+      .node
+      .get_with(|nd| nd.to_leaf_ref().read_cell(self.cell_idx, buf));
     Ok(())
   }
 
   pub fn insert_row(&mut self, key: u32, row: &RowBytes) -> Result<(), ExecErr> {
-    let res = self.node
-                  .set_with(|nd| nd.to_leaf_mut().insert_cell(self.cell_idx, key, row));
+    let res = self
+      .node
+      .set_with(|nd| nd.to_leaf_mut().insert_cell(self.cell_idx, key, row));
     match res {
       Err(ExecErr::LeafNodeFull(_)) => self.split_leaf_and_insert_row(key, row),
       other => other,
@@ -49,12 +53,13 @@ impl<'a> Cursor<'a> {
 
   fn split_leaf_and_insert_row(&mut self, key: u32, row: &RowBytes) -> Result<(), ExecErr> {
     let leaf_new = self.node.set_with(|nd| {
-                              nd.to_leaf_mut()
-                                .insert_cell_and_split(self.cell_idx, key, row)
-                            });
+      nd.to_leaf_mut()
+        .insert_cell_and_split(self.cell_idx, key, row)
+    });
 
-    self.table
-        .insert_leaf_node(NodeRc::clone(&self.node), NodeRc::new(Node::Leaf(leaf_new)))?;
+    self
+      .table
+      .insert_leaf_node(NodeRc::clone(&self.node), NodeRc::new(Node::Leaf(leaf_new)))?;
     Ok(())
   }
 
@@ -62,15 +67,20 @@ impl<'a> Cursor<'a> {
     self.cell_idx += 1;
     let cell_nums = self.node.get_with(|nd| nd.to_leaf_ref().cells.len());
     if self.cell_idx == cell_nums {
-      let x = self.node.get_with(|nd| {
-                         if let Some(next) = nd.to_leaf_ref().next_leaf.as_ref() {
-                           let x = next.node.as_ref().unwrap();
-                           let x = x.upgrade().unwrap();
-                           Some(x)
-                         } else {
-                           None
-                         }
-                       });
+      let page_idx = self.node.get_page_idx();
+      let x = self.node.set_with(|nd| {
+        if let Some(next) = nd.to_leaf_mut().next_leaf.as_mut() {
+          if let Some(x) = next.node.as_ref() {
+            Some(x.upgrade().unwrap())
+          } else {
+            let nd = self.table.load_node(next.page as usize, page_idx).unwrap();
+            next.node = Some(NodeRc::downgrade(&nd));
+            Some(nd)
+          }
+        } else {
+          None
+        }
+      });
       if let Some(nd) = x {
         self.node = nd;
         self.cell_idx = 0;

@@ -2,6 +2,7 @@ mod btree;
 mod cursor;
 pub mod error;
 mod pager;
+mod pager2;
 mod row;
 mod table;
 
@@ -31,9 +32,9 @@ fn do_meta_command(cmd_str: &str, table: &Table) -> Result<(), MetaCmdErr> {
   match cmd_str {
     ".exit" => {
       table.close_db().unwrap_or_else(|e| {
-                        eprintln!("{e:?}");
-                        process::exit(1);
-                      });
+        eprintln!("{e:?}");
+        process::exit(1);
+      });
       process::exit(0);
     }
     ".constants" => {
@@ -45,7 +46,9 @@ fn do_meta_command(cmd_str: &str, table: &Table) -> Result<(), MetaCmdErr> {
       println!("{}", table.btree_to_str());
     }
     _ => {
-      return Err(MetaCmdErr::Unrecognized(format!("Unrecognized command {cmd_str:?}.")));
+      return Err(MetaCmdErr::Unrecognized(format!(
+        "Unrecognized command {cmd_str:?}."
+      )));
     }
   }
   Ok(())
@@ -59,7 +62,7 @@ enum Statement {
 fn prepare_statement(cmd_str: &str) -> Result<Statement, PrepareErr> {
   lazy_static! {
     static ref RE_INSERT: Regex = Regex::new(
-                                             r"(?x)
+      r"(?x)
             insert
             \s+
             (-?\d+)      # id
@@ -68,7 +71,8 @@ fn prepare_statement(cmd_str: &str) -> Result<Statement, PrepareErr> {
             \s+
             ([^\s]+)    # email
         "
-    ).unwrap();
+    )
+    .unwrap();
   }
   let syntax_err = "Syntax error. Could not parse statement.".to_string();
   match cmd_str {
@@ -81,12 +85,16 @@ fn prepare_statement(cmd_str: &str) -> Result<Statement, PrepareErr> {
           }
           Err(_) => return Err(PrepareErr::SyntaxErr(syntax_err)),
         };
-        Ok(Statement::Insert(Box::new(Row::build(id, &cap[2], &cap[3])?)))
+        Ok(Statement::Insert(Box::new(Row::build(
+          id, &cap[2], &cap[3],
+        )?)))
       }
       None => Err(PrepareErr::SyntaxErr(syntax_err)),
     },
     s if s.starts_with("select") => Ok(Statement::Select),
-    _ => Err(PrepareErr::Unrecognized(format!("Unrecognized keyword at start of {cmd_str:?}."))),
+    _ => Err(PrepareErr::Unrecognized(format!(
+      "Unrecognized keyword at start of {cmd_str:?}."
+    ))),
   }
 }
 
@@ -120,7 +128,9 @@ fn print_constants() {
   use btree::leaf::{HEADER_SIZE, MAX_CELLS};
   println!("ROW_SIZE:                  {}", row::ROW_SIZE);
   println!("LEAF_NODE_HEADER_SIZE:     {}", HEADER_SIZE);
-  println!("LEAF_NODE_SPACE_FOR_CELLS: {}",
-           pager::PAGE_SIZE - HEADER_SIZE);
+  println!(
+    "LEAF_NODE_SPACE_FOR_CELLS: {}",
+    pager::PAGE_SIZE - HEADER_SIZE
+  );
   println!("LEAF_NODE_MAX_CELLS:       {}", MAX_CELLS);
 }

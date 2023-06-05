@@ -2,7 +2,6 @@ use crate::btree::node::Node;
 use crate::btree::NodeRc;
 use crate::error::ExecErr;
 use crate::table::TABLE_MAX_PAGES;
-// use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -16,18 +15,6 @@ pub struct Pager {
   pub num_pages: usize,
   pub pages: [Option<NodeRc>; TABLE_MAX_PAGES],
 }
-
-// pub struct Pager2(RefCell<Pager>);
-//
-// impl Pager2 {
-//   fn query(&self, page_idx: usize) -> NodeRc {
-//     if let Some(nd) = self.0.borrow().pages[page_idx].as_ref() {
-//       NodeRc::clone(&nd)
-//     } else {
-//       self.0.borrow_mut().read_node(page_idx).unwrap()
-//     }
-//   }
-// }
 
 impl Pager {
   /// create a Pager by opening a Database file.
