@@ -5,6 +5,7 @@ mod pager;
 mod pager2;
 mod row;
 mod table;
+mod table2;
 
 use std::num::IntErrorKind;
 use std::process;
