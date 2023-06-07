@@ -1,4 +1,4 @@
-use crate::pager::Page;
+use crate::pager2::Page;
 use std::io::{Cursor, Read, Write};
 
 pub fn read_u32_from(reader: &mut Cursor<&Page>) -> Option<u32> {

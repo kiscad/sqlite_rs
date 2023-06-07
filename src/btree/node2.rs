@@ -2,8 +2,8 @@ use super::intern2::Intern;
 use super::leaf2::Leaf;
 use crate::btree::utils;
 use crate::error::ExecErr;
-use crate::pager::Page;
-use std::io;
+use crate::pager2::Page;
+use std::{fmt, io};
 
 pub enum Node {
   Leaf(Leaf),
@@ -11,6 +11,13 @@ pub enum Node {
 }
 
 impl Node {
+  pub fn is_leaf(&self) -> bool {
+    match self {
+      Self::Intern(_) => false,
+      Self::Leaf(n_) => true,
+    }
+  }
+
   pub fn get_is_root(&self) -> bool {
     match self {
       Self::Intern(nd) => nd.is_root,
@@ -25,20 +32,7 @@ impl Node {
     }
   }
 
-  pub fn get_pg_idx(&self) -> usize {
-    match self {
-      Self::Intern(nd) => nd.pg_idx,
-      Self::Leaf(nd) => nd.pg_idx,
-    }
-  }
-
-  pub fn set_pg_idx(&mut self, pg_idx: usize) {
-    match self {
-      Self::Intern(nd) => nd.pg_idx = pg_idx,
-      Self::Leaf(nd) => nd.pg_idx = pg_idx,
-    }
-  }
-
+  #[allow(unused)]
   pub fn get_parent(&self) -> Option<usize> {
     match self {
       Self::Intern(nd) => nd.parent,
@@ -53,13 +47,13 @@ impl Node {
     }
   }
 
-  pub fn new_from_page(pg_idx: usize, page: &Page) -> Self {
+  pub fn new_from_page(page: &Page) -> Self {
     let mut reader = io::Cursor::new(page);
     let is_leaf = utils::read_bool_from(&mut reader);
     if is_leaf {
-      Self::Leaf(Leaf::new_from_page(pg_idx, page))
+      Self::Leaf(Leaf::new_from_page(page))
     } else {
-      Self::Intern(Intern::new_from_page(pg_idx, page))
+      Self::Intern(Intern::new_from_page(page))
     }
   }
 
@@ -95,6 +89,15 @@ impl Node {
     match self {
       Self::Leaf(_) => Err(ExecErr::NodeError("Not Intern".to_string())),
       Self::Intern(nd) => Ok(nd),
+    }
+  }
+}
+
+impl fmt::Display for Node {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Self::Intern(nd) => write!(f, "{}", nd),
+      Self::Leaf(nd) => write!(f, "{}", nd),
     }
   }
 }

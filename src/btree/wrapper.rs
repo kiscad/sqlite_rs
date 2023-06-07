@@ -37,18 +37,22 @@ impl NodeRc {
   }
 
   pub fn new_parent_from_self(&self) -> Parent {
-    Parent { page: self.get_page_idx() as u32,
-             node: NodeRc::downgrade(self) }
+    Parent {
+      page: self.get_page_idx() as u32,
+      node: NodeRc::downgrade(self),
+    }
   }
 
   pub fn get_with<F, T>(&self, mut f: F) -> T
-    where F: FnMut(&Node) -> T
+  where
+    F: FnMut(&Node) -> T,
   {
     f(self.0.borrow().deref())
   }
 
   pub fn set_with<F, T>(&self, f: F) -> T
-    where F: FnOnce(&mut Node) -> T
+  where
+    F: FnOnce(&mut Node) -> T,
   {
     f(self.0.borrow_mut().deref_mut())
   }

@@ -1,6 +1,6 @@
 use super::utils;
 use crate::error::ExecErr;
-use crate::pager::{Page, PAGE_SIZE};
+use crate::pager2::{Page, PAGE_SIZE};
 use std::fmt;
 use std::io;
 use std::io::BufRead;
@@ -8,35 +8,34 @@ use std::io::BufRead;
 #[derive(Debug)]
 pub struct Intern {
   pub is_root: bool,
-  pub pg_idx: usize,
   pub parent: Option<usize>,
-  children: Vec<Child>,
+
+  pub children: Vec<Child>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Child {
-  pg_idx: usize,
-  key_max: Option<usize>, // the rightmost child doesn't have key_max
+  pub pg_idx: usize,
+  pub key_max: Option<u32>, // the rightmost child doesn't have key_max
 }
 
 impl Child {
-  pub fn new(pg_idx: usize, key_max: Option<usize>) -> Self {
+  pub fn new(pg_idx: usize, key_max: Option<u32>) -> Self {
     Self { pg_idx, key_max }
   }
 }
 
 impl Intern {
-  pub fn new(is_root: bool, pg_idx: usize, parent: Option<usize>, children: Vec<Child>) -> Self {
+  pub fn new(is_root: bool, parent: Option<usize>, children: Vec<Child>) -> Self {
     assert!(children.len() >= 2);
     Self {
       is_root,
-      pg_idx,
       parent,
       children,
     }
   }
 
-  pub fn new_from_page(pg_idx: usize, page: &Page) -> Self {
+  pub fn new_from_page(page: &Page) -> Self {
     let mut reader = io::Cursor::new(page);
     reader.consume(1); // the first byte is for node-type
 
@@ -52,7 +51,7 @@ impl Intern {
         let pg_idx = utils::read_u32_from(&mut reader)
           .map(|x| x as usize)
           .unwrap();
-        let key_max = utils::read_u32_from(&mut reader).map(|x| x as usize);
+        let key_max = utils::read_u32_from(&mut reader);
         Child { pg_idx, key_max }
       })
       .collect();
@@ -64,7 +63,6 @@ impl Intern {
 
     Self {
       is_root,
-      pg_idx,
       parent,
       children,
     }
@@ -90,9 +88,9 @@ impl Intern {
     buf
   }
 
-  pub fn insert_child(&mut self, pg_idx: usize, key_max: usize) -> Result<(), ExecErr> {
+  pub fn insert_child(&mut self, pg_idx: usize, key_max: u32) -> Result<(), ExecErr> {
     // TODO: remove 1000
-    if self.children.len() > 1000 {
+    if self.children.len() > 100 {
       return Err(ExecErr::InternNodeFull("Intern node full".to_string()));
     }
     let idx = self.search_child_idx_by_key(key_max);
@@ -100,17 +98,37 @@ impl Intern {
     Ok(())
   }
 
-  pub fn find_child_set_key(
-    &mut self,
-    key_old: usize,
-    key_new: Option<usize>,
-  ) -> Result<(), ExecErr> {
-    let idx = self.search_child_idx_by_key(key_old);
-    self.children[idx].key_max = key_new;
-    Ok(())
+  pub fn insert_child_and_split(&mut self, pg_idx: usize, key_max: u32) -> Result<Self, ExecErr> {
+    let idx = self.search_child_idx_by_key(key_max);
+    self.children.insert(idx, Child::new(pg_idx, Some(key_max)));
+    let children: Vec<_> = self.children.drain(50..).collect(); // TODO:
+    let ch_idx = self.children.len() - 1;
+    self.children[ch_idx].key_max = None;
+    Ok(Self {
+      is_root: false,
+      parent: self.parent,
+      children,
+    })
   }
 
-  fn search_child_idx_by_key(&self, key: usize) -> usize {
+  pub fn find_child_and<F, T>(&self, key_max: u32, mut f: F) -> Result<T, ExecErr>
+  where
+    F: FnMut(&Child) -> T,
+  {
+    let idx = self.search_child_idx_by_key(key_max);
+    Ok(f(&self.children[idx]))
+  }
+
+  #[allow(unused)]
+  pub fn find_mut_child_and<F, T>(&mut self, key_max: u32, mut f: F) -> Result<T, ExecErr>
+  where
+    F: FnMut(&mut Child) -> T,
+  {
+    let idx = self.search_child_idx_by_key(key_max);
+    Ok(f(&mut self.children[idx]))
+  }
+
+  fn search_child_idx_by_key(&self, key: u32) -> usize {
     // binary search
     let mut lower = 0;
     let mut upper = self.children.len();
@@ -134,11 +152,6 @@ impl Intern {
 
 impl fmt::Display for Intern {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    writeln!(
-      f,
-      "intern (size {}, page {})",
-      self.children.len(),
-      self.pg_idx
-    )
+    write!(f, "intern (size {})", self.children.len(),)
   }
 }

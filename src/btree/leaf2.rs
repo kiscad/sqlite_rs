@@ -1,39 +1,48 @@
-use crate::btree::leaf::MAX_CELLS;
+// use crate::btree::leaf::MAX_CELLS;
 use crate::btree::utils;
 use crate::error::ExecErr;
-use std::fmt;
 use std::io::{self, BufRead, Read, Write};
+use std::{fmt, mem};
 
-use crate::pager::{Page, PAGE_SIZE};
-use crate::row::{RowBytes, ROW_SIZE};
+use crate::pager2::{Page, PAGE_SIZE};
+use crate::row2::{RowBytes, ROW_SIZE};
+
+const NODE_TYPE_SIZE: usize = mem::size_of::<u8>();
+const IS_ROOT_SIZE: usize = mem::size_of::<u8>();
+const PARENT_SIZE: usize = mem::size_of::<u32>();
+const NEXT_LEAF_SIZE: usize = mem::size_of::<u32>();
+pub const HEADER_SIZE: usize = NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_SIZE + NEXT_LEAF_SIZE;
+const CELL_KEY_SIZE: usize = mem::size_of::<u32>();
+const CELL_SIZE: usize = CELL_KEY_SIZE + ROW_SIZE;
+pub const MAX_CELLS: usize = (PAGE_SIZE - HEADER_SIZE) / CELL_SIZE;
+const SPLIT_IDX: usize = MAX_CELLS / 2 + 1;
 
 #[derive(Debug)]
 pub struct Leaf {
   pub is_root: bool,
-  pub pg_idx: usize,
   pub parent: Option<usize>, // parent's pg_idx
-  pub next: Option<usize>,   // next-leaf's pg_idx
-  cells: Vec<Cell>,
+
+  pub next: Option<usize>, // next-leaf's pg_idx
+  pub cells: Vec<Cell>,
 }
 
 #[derive(Debug)]
-struct Cell {
-  key: u32,
-  row: RowBytes,
+pub struct Cell {
+  pub key: u32,
+  pub row: RowBytes,
 }
 
 impl Leaf {
-  pub fn new(is_root: bool, pg_idx: usize, parent: Option<usize>, next: Option<usize>) -> Self {
+  pub fn new(is_root: bool, parent: Option<usize>, next: Option<usize>) -> Self {
     Self {
       is_root,
-      pg_idx,
       parent,
       next,
       cells: vec![],
     }
   }
 
-  pub fn new_from_page(pg_idx: usize, page: &Page) -> Self {
+  pub fn new_from_page(page: &Page) -> Self {
     let mut reader = io::Cursor::new(page);
     reader.consume(1); // the first byte is for node-type
 
@@ -56,7 +65,6 @@ impl Leaf {
 
     Self {
       is_root,
-      pg_idx,
       parent,
       next,
       cells,
@@ -93,7 +101,27 @@ impl Leaf {
     Ok(())
   }
 
+  pub fn insert_row_and_split(
+    &mut self,
+    key: u32,
+    row: &RowBytes,
+    pg_idx_new: usize,
+  ) -> Result<Self, ExecErr> {
+    let idx = self.search_cell_idx_by_key(key);
+    self.cells.insert(idx, Cell { key, row: *row });
+    let cells: Vec<_> = self.cells.drain(SPLIT_IDX..).collect();
+    let next_old = self.next.replace(pg_idx_new);
+
+    Ok(Self {
+      is_root: false,
+      parent: self.parent,
+      next: next_old,
+      cells,
+    })
+  }
+
   /// Find the nearest cell which key is greater or equal to the input key.
+  #[allow(unused)]
   pub fn find_row(&self, key: u32) -> Result<&Cell, ExecErr> {
     let idx = self.search_cell_idx_by_key(key);
     if idx >= self.cells.len() {
@@ -102,11 +130,15 @@ impl Leaf {
     Ok(&self.cells[idx])
   }
 
-  pub fn key_max(&self) -> usize {
-    self.cells[self.cells.len() - 1].key as usize
+  pub fn key_max(&self) -> u32 {
+    self.cells[self.cells.len() - 1].key
   }
 
-  fn search_cell_idx_by_key(&self, key: u32) -> usize {
+  pub fn size(&self) -> usize {
+    self.cells.len()
+  }
+
+  pub fn search_cell_idx_by_key(&self, key: u32) -> usize {
     // Binary search
     let mut lower = 0;
     let mut upper = self.cells.len();
@@ -127,7 +159,7 @@ impl Leaf {
 
 impl fmt::Display for Leaf {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    writeln!(f, "leaf (size {}, page {})", self.cells.len(), self.pg_idx)?;
+    writeln!(f, "leaf (size {})", self.cells.len(),)?;
     let cell_str: Vec<_> = self
       .cells
       .iter()

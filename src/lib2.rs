@@ -1,9 +1,13 @@
-mod btree;
+pub mod btree;
 mod cursor2;
 pub mod error;
 mod pager2;
 mod row2;
 mod table2;
+
+use cursor2 as cursor;
+use pager2 as pager;
+use table2 as table;
 
 use std::num::IntErrorKind;
 use std::process;
@@ -11,10 +15,11 @@ use std::process;
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use cursor::Cursor;
 use error::{DbError, ExecErr, MetaCmdErr, PrepareErr};
-use row2::Row;
+use row::Row;
 
-pub use table2::Table;
+pub use table::Table;
 
 pub fn run_cmd(cmd_str: &str, table: &mut Table) -> Result<(), DbError> {
   if cmd_str.starts_with('.') {
@@ -99,42 +104,36 @@ fn prepare_statement(cmd_str: &str) -> Result<Statement, PrepareErr> {
 fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr> {
   use Statement::*;
   match stmt {
-    Insert(row) => table.insert_row(row.key, row),
+    Insert(row) => execute_insert(row, table),
     Select => execute_select(table),
   }
 }
 
-// fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
-//   let key = row.key;
-//   let mut cursor = Cursor::new_by_key(table, key as usize);
-//   row.insert_to(&mut cursor)?;
-//   Ok(())
-// }
+fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
+  let key = row.id;
+  let mut cursor = Cursor::new_by_key(table, key as usize);
+  row.insert_to(&mut cursor)?;
+  Ok(())
+}
 
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
-  let mut cursor = table.new_cursor_by_key(0); // cursor at start of table
-  while !cursor.at_end {
-    let row = table.select_row(&cursor);
+  let mut cursor = Cursor::new_at_table_start(table);
+  while !cursor.end_of_table {
+    let mut row = Row::default();
+    row.read_from(&mut cursor)?;
     println!("{row}");
-    table.advance_cursor(&mut cursor);
+    cursor.advance()?;
   }
-  // let mut cursor = Cursor::new_at_table_start(table);
-  // while !cursor.end_of_table {
-  //   let mut row = Row::default();
-  //   row.read_from(&mut cursor)?;
-  //   println!("{row}");
-  //   cursor.advance()?;
-  // }
   Ok(())
 }
 
 fn print_constants() {
-  use btree::leaf2::{HEADER_SIZE, MAX_CELLS};
-  println!("ROW_SIZE:                  {}", row2::ROW_SIZE);
+  use btree::leaf::{HEADER_SIZE, MAX_CELLS};
+  println!("ROW_SIZE:                  {}", row::ROW_SIZE);
   println!("LEAF_NODE_HEADER_SIZE:     {}", HEADER_SIZE);
   println!(
     "LEAF_NODE_SPACE_FOR_CELLS: {}",
-    pager2::PAGE_SIZE - HEADER_SIZE
+    pager::PAGE_SIZE - HEADER_SIZE
   );
   println!("LEAF_NODE_MAX_CELLS:       {}", MAX_CELLS);
 }
