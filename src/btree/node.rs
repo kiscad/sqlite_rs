@@ -1,93 +1,56 @@
 use super::intern::Intern;
 use super::leaf::Leaf;
-use super::wrapper::{NodeRc, NodeWk};
+use crate::btree::utils;
 use crate::error::ExecErr;
 use crate::pager::Page;
-use std::fmt;
-use std::io::{self, Read};
+use std::{fmt, io};
 
-#[derive(Default, Clone, Debug)]
-pub struct Parent {
-  pub page: u32,
-  pub node: NodeWk,
-}
-
-impl Parent {
-  pub fn new(page: u32) -> Self {
-    Self { page,
-           node: NodeWk::default() }
-  }
-}
-
-#[derive(Debug)]
 pub enum Node {
-  Intern(Intern),
   Leaf(Leaf),
+  Intern(Intern),
 }
 
 impl Node {
-  pub fn get_page_idx(&self) -> usize {
-    match self {
-      Self::Leaf(nd) => nd.page_idx,
-      Self::Intern(nd) => nd.page_idx,
-    }
-  }
-
-  pub fn set_page_idx(&mut self, val: usize) {
-    match self {
-      Self::Leaf(nd) => nd.page_idx = val,
-      Self::Intern(nd) => nd.page_idx = val,
-    }
-  }
-
-  pub fn get_parent(&self) -> Option<NodeRc> {
-    match self {
-      Self::Intern(nd) => nd.parent.as_ref().map(|x| x.node.upgrade().unwrap()),
-      Self::Leaf(nd) => nd.parent.as_ref().map(|x| x.node.upgrade().unwrap()),
-    }
-  }
-
-  pub fn set_parent(&mut self, parent: Parent) {
-    match self {
-      Self::Intern(nd) => nd.parent.insert(parent),
-      Self::Leaf(nd) => nd.parent.insert(parent),
-    };
-  }
-
-  pub fn is_root(&self) -> bool {
-    match self {
-      Self::Leaf(nd) => nd.is_root,
-      Self::Intern(nd) => nd.is_root,
-    }
-  }
-
   pub fn is_leaf(&self) -> bool {
     match self {
-      Self::Leaf(_) => true,
       Self::Intern(_) => false,
+      Self::Leaf(_) => true,
     }
   }
 
-  pub fn set_root(&mut self, is_root: bool) {
+  #[allow(unused)]
+  pub fn get_is_root(&self) -> bool {
+    match self {
+      Self::Intern(nd) => nd.is_root,
+      Self::Leaf(nd) => nd.is_root,
+    }
+  }
+
+  pub fn set_is_root(&mut self, is_root: bool) {
     match self {
       Self::Intern(nd) => nd.is_root = is_root,
       Self::Leaf(nd) => nd.is_root = is_root,
     }
   }
 
-  pub fn serialize(&self) -> Page {
+  #[allow(unused)]
+  pub fn get_parent(&self) -> Option<usize> {
     match self {
-      Node::Leaf(nd) => nd.serialize(),
-      Node::Intern(nd) => nd.serialize(),
+      Self::Intern(nd) => nd.parent,
+      Self::Leaf(nd) => nd.parent,
+    }
+  }
+
+  pub fn set_parent(&mut self, parent: Option<usize>) {
+    match self {
+      Self::Intern(nd) => nd.parent = parent,
+      Self::Leaf(nd) => nd.parent = parent,
     }
   }
 
   pub fn new_from_page(page: &Page) -> Self {
     let mut reader = io::Cursor::new(page);
-    let mut is_leaf = [0; 1];
-    reader.read_exact(&mut is_leaf).unwrap();
-    let is_leaf = is_leaf[0] != 0;
-
+    let is_leaf = utils::read_bool_from(&mut reader);
     if is_leaf {
       Self::Leaf(Leaf::new_from_page(page))
     } else {
@@ -95,52 +58,38 @@ impl Node {
     }
   }
 
-  pub fn get_max_key(&self) -> u32 {
+  pub fn serialize(&self) -> Page {
     match self {
-      Self::Intern(nd) => nd.children[nd.children.len() - 1].key,
-      Self::Leaf(nd) => nd.cells[nd.cells.len() - 1].key,
+      Self::Intern(nd) => nd.serialize(),
+      Self::Leaf(nd) => nd.serialize(),
     }
   }
 
-  pub fn try_into_leaf(&self) -> Result<&Leaf, ExecErr> {
+  pub fn as_leaf(&self) -> Result<&Leaf, ExecErr> {
     match self {
+      Self::Intern(_) => Err(ExecErr::NodeError("Not Leaf".to_string())),
       Self::Leaf(nd) => Ok(nd),
-      Self::Intern(_) => Err(ExecErr::NodeError("Error: It's a Internal node.".to_string())),
     }
   }
 
-  pub fn try_into_leaf_mut(&mut self) -> Result<&mut Leaf, ExecErr> {
+  pub fn as_leaf_mut(&mut self) -> Result<&mut Leaf, ExecErr> {
     match self {
+      Self::Intern(_) => Err(ExecErr::NodeError("Not Leaf".to_string())),
       Self::Leaf(nd) => Ok(nd),
-      Self::Intern(_) => Err(ExecErr::NodeError("Error: It's a Internal node.".to_string())),
     }
   }
 
-  pub fn to_leaf_ref(&self) -> &Leaf {
+  pub fn as_intern(&self) -> Result<&Intern, ExecErr> {
     match self {
-      Self::Leaf(nd) => nd,
-      Self::Intern(_) => panic!(),
+      Self::Leaf(_) => Err(ExecErr::NodeError("Not Intern".to_string())),
+      Self::Intern(nd) => Ok(nd),
     }
   }
 
-  pub fn to_leaf_mut(&mut self) -> &mut Leaf {
+  pub fn as_intern_mut(&mut self) -> Result<&mut Intern, ExecErr> {
     match self {
-      Self::Leaf(nd) => nd,
-      Self::Intern(_) => panic!(),
-    }
-  }
-
-  pub fn to_intern_ref(&self) -> &Intern {
-    match self {
-      Self::Intern(nd) => nd,
-      Self::Leaf(_) => panic!(),
-    }
-  }
-
-  pub fn to_intern_mut(&mut self) -> &mut Intern {
-    match self {
-      Self::Intern(nd) => nd,
-      Self::Leaf(_) => panic!(),
+      Self::Leaf(_) => Err(ExecErr::NodeError("Not Intern".to_string())),
+      Self::Intern(nd) => Ok(nd),
     }
   }
 }

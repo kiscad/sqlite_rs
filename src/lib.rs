@@ -1,9 +1,9 @@
 mod btree;
-mod cursor2;
+mod cursor;
 pub mod error;
-mod pager2;
-mod row2;
-mod table2;
+mod pager;
+mod row;
+mod table;
 
 use std::num::IntErrorKind;
 use std::process;
@@ -12,9 +12,9 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use error::{DbError, ExecErr, MetaCmdErr, PrepareErr};
-use row2::Row;
+use row::Row;
 
-pub use table2::Table;
+pub use table::Table;
 
 pub fn run_cmd(cmd_str: &str, table: &mut Table) -> Result<(), DbError> {
   if cmd_str.starts_with('.') {
@@ -129,12 +129,12 @@ fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
 }
 
 fn print_constants() {
-  use btree::leaf2::{HEADER_SIZE, MAX_CELLS};
-  println!("ROW_SIZE:                  {}", row2::ROW_SIZE);
+  use btree::leaf::{HEADER_SIZE, MAX_CELLS};
+  println!("ROW_SIZE:                  {}", row::ROW_SIZE);
   println!("LEAF_NODE_HEADER_SIZE:     {}", HEADER_SIZE);
   println!(
     "LEAF_NODE_SPACE_FOR_CELLS: {}",
-    pager2::PAGE_SIZE - HEADER_SIZE
+    pager::PAGE_SIZE - HEADER_SIZE
   );
   println!("LEAF_NODE_MAX_CELLS:       {}", MAX_CELLS);
 }
