@@ -8,7 +8,7 @@ use crate::row::Row;
 use std::path::Path;
 
 const ROOT: usize = 0;
-pub const TABLE_MAX_PAGES: usize = 100;
+pub const MAX_PAGES: usize = 100;
 
 pub struct Table {
   pager: Pager,
@@ -31,7 +31,7 @@ impl Table {
 
   pub fn insert_row(&mut self, key: u32, row: &Row) -> Result<(), ExecErr> {
     let row = row.serialize();
-    let leaf_idx = self.find_leaf_recurs(ROOT, key)?;
+    let leaf_idx = self.find_leaf_recur(ROOT, key)?;
     let res = self
       .pager
       .set_node_by(leaf_idx, |nd| nd.as_leaf_mut()?.insert_row(key, &row))?;
@@ -67,7 +67,7 @@ impl Table {
   }
 
   pub fn new_cursor_by_key(&self, key: u32) -> Cursor {
-    let leaf_idx = self.find_leaf_recurs(ROOT, key).unwrap();
+    let leaf_idx = self.find_leaf_recur(ROOT, key).unwrap();
     let (cell_idx, at_end) = self
       .pager
       .get_node_do(leaf_idx, |nd| {
@@ -113,14 +113,20 @@ impl Table {
     self.btree_to_str_recur(ROOT)
   }
 
-  fn find_leaf_recurs(&self, pg_idx: usize, key: u32) -> Result<usize, ExecErr> {
-    self.pager.get_node_do(pg_idx, |node| match node {
+  fn find_leaf_recur(&self, pg_idx: usize, key: u32) -> Result<usize, ExecErr> {
+    let (is_leaf, pid) = self.pager.get_node_do(pg_idx, |node| match node {
       Node::Intern(nd) => {
         let pg_idx = nd.find_child_and(key, |ch| ch.pg_idx)?;
-        self.find_leaf_recurs(pg_idx, key)
+        Ok((false, pg_idx))
       }
-      Node::Leaf(_) => Ok(pg_idx),
-    })?
+      Node::Leaf(_) => Ok((true, pg_idx)),
+    })??;
+
+    if is_leaf {
+      Ok(pid)
+    } else {
+      self.find_leaf_recur(pid, key)
+    }
   }
 
   fn insert_child(&mut self, child: Child, parent: Option<usize>) -> Result<(), ExecErr> {

@@ -104,13 +104,6 @@ fn execute_statement(stmt: &Statement, table: &mut Table) -> Result<(), ExecErr>
   }
 }
 
-// fn execute_insert(row: &Row, table: &mut Table) -> Result<(), ExecErr> {
-//   let key = row.key;
-//   let mut cursor = Cursor::new_by_key(table, key as usize);
-//   row.insert_to(&mut cursor)?;
-//   Ok(())
-// }
-
 fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
   let mut cursor = table.new_cursor_by_key(0); // cursor at start of table
   while !cursor.at_end {
@@ -118,13 +111,6 @@ fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
     println!("{row}");
     table.advance_cursor(&mut cursor);
   }
-  // let mut cursor = Cursor::new_at_table_start(table);
-  // while !cursor.end_of_table {
-  //   let mut row = Row::default();
-  //   row.read_from(&mut cursor)?;
-  //   println!("{row}");
-  //   cursor.advance()?;
-  // }
   Ok(())
 }
 

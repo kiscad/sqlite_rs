@@ -82,13 +82,13 @@ impl Intern {
     if self.children.len() > 100 {
       return Err(ExecErr::InternNodeFull("Intern node full".to_string()));
     }
-    let idx = self.search_child_idx_by_key(key_max);
+    let idx = self.search_insert_idx_by_key(key_max);
     self.children.insert(idx, Child::new(pg_idx, key_max));
     Ok(())
   }
 
   pub fn insert_child_and_split(&mut self, pg_idx: usize, key_max: u32) -> Result<Self, ExecErr> {
-    let idx = self.search_child_idx_by_key(key_max);
+    let idx = self.search_insert_idx_by_key(key_max);
     self.children.insert(idx, Child::new(pg_idx, key_max));
     let children: Vec<_> = self.children.drain(50..).collect(); // TODO:
 
@@ -103,7 +103,7 @@ impl Intern {
   where
     F: FnMut(&Child) -> T,
   {
-    let idx = self.search_child_idx_by_key(key_max);
+    let idx = self.search_child_by_key(key_max);
     Ok(f(&self.children[idx]))
   }
 
@@ -112,14 +112,14 @@ impl Intern {
   where
     F: FnMut(&mut Child) -> T,
   {
-    let idx = self.search_child_idx_by_key(key_max);
+    let idx = self.search_child_by_key(key_max);
     Ok(f(&mut self.children[idx]))
   }
 
-  fn search_child_idx_by_key(&self, key: u32) -> usize {
+  fn search_insert_idx_by_key(&self, key: u32) -> usize {
     // binary search
     let mut lower = 0;
-    let mut upper = self.children.len() - 1;
+    let mut upper = self.children.len();
     while lower < upper {
       let mid = (lower + upper) / 2;
       let key_mid = self.children[mid].key_max;
@@ -131,10 +131,61 @@ impl Intern {
     }
     lower
   }
+
+  fn search_child_by_key(&self, key: u32) -> usize {
+    self
+      .search_insert_idx_by_key(key)
+      .min(self.children.len() - 1)
+  }
 }
 
 impl fmt::Display for Intern {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "intern (size {})", self.children.len(),)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn setup(keys: &[u32]) -> Intern {
+    Intern {
+      is_root: false,
+      parent: None,
+      children: keys.iter().map(|&i| Child::new(i as usize, i)).collect(),
+    }
+  }
+
+  #[test]
+  fn insert_rightmost_child() {
+    let mut parent = setup(&[1, 3]);
+    parent.insert_child(4, 4).unwrap();
+    let keys: Vec<_> = parent.children.iter().map(|ch| ch.key_max).collect();
+    assert_eq!(keys, vec![1, 3, 4]);
+  }
+
+  #[test]
+  fn insert_mid_child() {
+    let mut parent = setup(&[1, 3]);
+    parent.insert_child(2, 2).unwrap();
+    let keys: Vec<_> = parent.children.iter().map(|ch| ch.key_max).collect();
+    assert_eq!(keys, vec![1, 2, 3]);
+  }
+
+  #[test]
+  fn insert_leaftmost_child() {
+    let mut parent = setup(&[1, 3]);
+    parent.insert_child(0, 0).unwrap();
+    let keys: Vec<_> = parent.children.iter().map(|ch| ch.key_max).collect();
+    assert_eq!(keys, vec![0, 1, 3]);
+  }
+
+  #[test]
+  fn insert_rightmost_in_3_child_parent() {
+    let mut parent = setup(&[1, 2, 3]);
+    parent.insert_child(4, 4).unwrap();
+    let keys: Vec<_> = parent.children.iter().map(|ch| ch.key_max).collect();
+    assert_eq!(keys, vec![1, 2, 3, 4]);
   }
 }

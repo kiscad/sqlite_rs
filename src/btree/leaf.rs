@@ -53,7 +53,7 @@ impl Leaf {
     let num_cells = utils::read_u32_from(&mut reader).unwrap_or(0);
     let cells: Vec<_> = (0..num_cells)
       .map(|_| {
-        let key = utils::read_u32_from(&mut reader).unwrap();
+        let key = utils::read_u32_from(&mut reader).unwrap_or(0);
         let row = {
           let mut buf = [0; ROW_SIZE];
           reader.read_exact(&mut buf).unwrap();

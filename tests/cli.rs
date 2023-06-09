@@ -112,7 +112,6 @@ fn print_error_msg_if_id_is_negative() {
 }
 
 #[test]
-#[ignore]
 fn keeps_data_after_closing_connection() {
   let user = "user1";
   let email = "person1@example.com";
@@ -228,7 +227,6 @@ fn allows_printing_out_the_structure_of_2_leaf_node_btree() {
 }
 
 #[test]
-#[ignore]
 fn allows_printing_out_the_structure_of_3_leaf_node_btree() {
   let filename = "allows_printing_out_the_structure_of_3_leaf_node_btree.db";
   let mut cmd = Command::cargo_bin("sqlite_rs").unwrap();
@@ -241,7 +239,7 @@ fn allows_printing_out_the_structure_of_3_leaf_node_btree() {
   let _ = std::fs::remove_file(filename);
 
   let mut expect: String = (0..21).map(|_| "db > Executed.\n").collect();
-  expect.push_str("db > Tree:\ninternal (size 3)\n  leaf (size 7)\n");
+  expect.push_str("db > Tree:\nintern (size 3)\n  leaf (size 7)\n");
   expect.push_str(&(0..7).map(|i| format!("    - {i}\n")).collect::<String>());
   expect.push_str("  leaf (size 7)\n");
   expect.push_str(&(7..14).map(|i| format!("    - {i}\n")).collect::<String>());
