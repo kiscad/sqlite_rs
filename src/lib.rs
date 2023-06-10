@@ -115,12 +115,7 @@ fn execute_select(table: &mut Table) -> Result<(), ExecErr> {
 }
 
 fn print_constants() {
-  use btree::leaf::{HEADER_SIZE, MAX_CELLS};
+  use btree::leaf::MAX_CELLS;
   println!("ROW_SIZE:                  {}", row::ROW_SIZE);
-  println!("LEAF_NODE_HEADER_SIZE:     {}", HEADER_SIZE);
-  println!(
-    "LEAF_NODE_SPACE_FOR_CELLS: {}",
-    pager::PAGE_SIZE - HEADER_SIZE
-  );
   println!("LEAF_NODE_MAX_CELLS:       {}", MAX_CELLS);
 }

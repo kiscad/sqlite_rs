@@ -5,6 +5,13 @@ use std::fmt;
 use std::io;
 use std::io::BufRead;
 
+use super::node::{IS_ROOT_SIZE, NODE_TYPE_SIZE, PARENT_SIZE};
+const CHILD_NUM: usize = PARENT_SIZE;
+const HEADER_SIZE: usize = NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_SIZE + CHILD_NUM;
+const CHILD_SIZE: usize = PARENT_SIZE * 2;
+const CHILD_MAX: usize = (PAGE_SIZE - HEADER_SIZE) / CHILD_SIZE;
+const SPLIT_IDX: usize = CHILD_MAX / 2 + 1;
+
 #[derive(Debug)]
 pub struct Intern {
   pub is_root: bool,
@@ -41,13 +48,11 @@ impl Intern {
 
     let is_root = utils::read_bool_from(&mut reader);
     let parent = utils::read_u32_from(&mut reader).map(|x| x as usize);
-    let num_child = utils::read_u32_from(&mut reader).unwrap_or(0);
+    let num_child = utils::read_u32_from(&mut reader).unwrap();
 
     let children: Vec<_> = (0..num_child)
       .map(|_| {
-        let pg_idx = utils::read_u32_from(&mut reader)
-          .map(|x| x as usize)
-          .unwrap();
+        let pg_idx = utils::read_u32_from(&mut reader).unwrap() as usize;
         let key_max = utils::read_u32_from(&mut reader).unwrap();
         Child { pg_idx, key_max }
       })
@@ -79,7 +84,7 @@ impl Intern {
 
   pub fn insert_child(&mut self, pg_idx: usize, key_max: u32) -> Result<(), ExecErr> {
     // TODO: remove 1000
-    if self.children.len() > 100 {
+    if self.children.len() >= CHILD_MAX {
       return Err(ExecErr::InternNodeFull("Intern node full".to_string()));
     }
     let idx = self.search_insert_idx_by_key(key_max);
@@ -90,7 +95,7 @@ impl Intern {
   pub fn insert_child_and_split(&mut self, pg_idx: usize, key_max: u32) -> Result<Self, ExecErr> {
     let idx = self.search_insert_idx_by_key(key_max);
     self.children.insert(idx, Child::new(pg_idx, key_max));
-    let children: Vec<_> = self.children.drain(50..).collect(); // TODO:
+    let children: Vec<_> = self.children.drain(SPLIT_IDX..).collect(); // TODO:
 
     Ok(Self {
       is_root: false,

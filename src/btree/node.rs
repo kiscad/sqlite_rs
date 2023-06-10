@@ -3,7 +3,11 @@ use super::leaf::Leaf;
 use crate::btree::utils;
 use crate::error::ExecErr;
 use crate::pager::Page;
-use std::{fmt, io};
+use std::{fmt, io, mem};
+
+pub const NODE_TYPE_SIZE: usize = mem::size_of::<u8>();
+pub const IS_ROOT_SIZE: usize = mem::size_of::<u8>();
+pub const PARENT_SIZE: usize = mem::size_of::<u32>();
 
 pub enum Node {
   Leaf(Leaf),

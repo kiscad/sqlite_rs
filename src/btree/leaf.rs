@@ -1,17 +1,14 @@
-// use crate::btree::leaf::MAX_CELLS;
 use crate::btree::utils;
 use crate::error::ExecErr;
 use std::io::{self, BufRead, Read, Write};
 use std::{fmt, mem};
 
+use super::node::{IS_ROOT_SIZE, NODE_TYPE_SIZE, PARENT_SIZE};
 use crate::pager::{Page, PAGE_SIZE};
 use crate::row::{RowBytes, ROW_SIZE};
 
-const NODE_TYPE_SIZE: usize = mem::size_of::<u8>();
-const IS_ROOT_SIZE: usize = mem::size_of::<u8>();
-const PARENT_SIZE: usize = mem::size_of::<u32>();
 const NEXT_LEAF_SIZE: usize = mem::size_of::<u32>();
-pub const HEADER_SIZE: usize = NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_SIZE + NEXT_LEAF_SIZE;
+const HEADER_SIZE: usize = NODE_TYPE_SIZE + IS_ROOT_SIZE + PARENT_SIZE + NEXT_LEAF_SIZE;
 const CELL_KEY_SIZE: usize = mem::size_of::<u32>();
 const CELL_SIZE: usize = CELL_KEY_SIZE + ROW_SIZE;
 pub const MAX_CELLS: usize = (PAGE_SIZE - HEADER_SIZE) / CELL_SIZE;
@@ -50,10 +47,10 @@ impl Leaf {
     let parent = utils::read_u32_from(&mut reader).map(|x| x as usize);
     let next = utils::read_u32_from(&mut reader).map(|x| x as usize);
 
-    let num_cells = utils::read_u32_from(&mut reader).unwrap_or(0);
+    let num_cells = utils::read_u32_from(&mut reader).unwrap();
     let cells: Vec<_> = (0..num_cells)
       .map(|_| {
-        let key = utils::read_u32_from(&mut reader).unwrap_or(0);
+        let key = utils::read_u32_from(&mut reader).unwrap();
         let row = {
           let mut buf = [0; ROW_SIZE];
           reader.read_exact(&mut buf).unwrap();

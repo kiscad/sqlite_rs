@@ -48,7 +48,7 @@ impl Table {
         let key_max = self
           .pager
           .get_node_do(leaf_idx, |nd| nd.as_leaf().unwrap().key_max())?;
-        if let Some(parent) = leaf.parent {
+        if let Some(&parent) = leaf.parent.as_ref() {
           self.pager.set_node_by(parent, |nd| {
             nd.as_intern_mut()
               .unwrap()
@@ -142,16 +142,17 @@ impl Table {
         })?;
         match res {
           Err(ExecErr::InternNodeFull(_)) => {
-            let intern = self.pager.set_node_by(pg, |nd| {
+            let intern_new = self.pager.set_node_by(pg, |nd| {
               nd.as_intern_mut()
                 .unwrap()
                 .insert_child_and_split(child.pg_idx, child.key_max)
             })??;
-            let pg_idx_new = self.pager.size();
-            let parent = intern.parent;
-            self.pager.push_node(Node::Intern(intern))?;
-            let key_max = self.key_max(pg_idx_new);
-            let child = Child::new(pg_idx_new, key_max);
+            let pid_new = self.pager.size();
+            let parent = intern_new.parent;
+            self.pager.push_node(Node::Intern(intern_new))?;
+
+            let key_max = self.key_max(pid_new);
+            let child = Child::new(pid_new, key_max);
             self.insert_child(child, parent)
           }
           other => other,

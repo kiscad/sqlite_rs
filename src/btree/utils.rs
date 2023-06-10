@@ -5,7 +5,7 @@ pub fn read_u32_from(reader: &mut Cursor<&Page>) -> Option<u32> {
   let mut buf = [0; 4];
   reader.read_exact(&mut buf).unwrap();
   let res = u32::from_be_bytes(buf);
-  if res == 0 {
+  if res == u32::MAX {
     None
   } else {
     Some(res)
@@ -23,5 +23,7 @@ pub fn write_bool_to(writer: &mut Cursor<&mut [u8]>, val: bool) {
 }
 
 pub fn write_opt_u32_to(writer: &mut Cursor<&mut [u8]>, val: Option<u32>) {
-  writer.write_all(&val.unwrap_or(0).to_be_bytes()).unwrap();
+  writer
+    .write_all(&val.unwrap_or(u32::MAX).to_be_bytes())
+    .unwrap();
 }
