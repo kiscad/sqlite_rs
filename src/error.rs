@@ -42,10 +42,12 @@ pub enum ExecErr {
   LeafNodeFull(String),
   InternNodeFull(String),
   PagerFull(String),
+  PagerFull2,
   PageNumOutBound(String),
   IoError(String),
   NodeError(String),
   CellNotFound(String),
+  PageUnload,
 }
 
 impl Display for ExecErr {
@@ -60,6 +62,7 @@ impl Display for ExecErr {
       | Self::IoError(s)
       | Self::NodeError(s)
       | Self::CellNotFound(s) => write!(f, "{s}"),
+      _ => write!(f, ""),
     }
   }
 }
